@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playcentrix Main</title>
+<style>
+/* RESET & BASE */
+*{margin:0;padding:0;box-sizing:border-box;font-family: 'Segoe UI', sans-serif;}
+body, html{height:100%;overflow:hidden;background:#f0f2f5;color:#333;}
+
+/* TERMINAL */
+#terminalScreen{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    background:#000;color:#0f0;font-family: monospace;font-size:16px;
+    padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
+    white-space:pre-line;overflow:hidden;
+}
+.cursor{display:inline-block;width:10px;height:18px;background:#0f0;animation:blink 0.7s infinite;}
+@keyframes blink{0%,50%,100%{opacity:1;}25%,75%{opacity:0;}}
+
+/* DASHBOARD */
+#dashboard{display:none;height:100%;padding:30px;text-align:center;overflow-y:auto;}
+h1{margin-bottom:30px;font-size:1.8rem;color:#333;}
+.optionCard{
+    display:block;width:90%;max-width:300px;margin:15px auto;padding:20px;
+    font-size:1.2rem;border-radius:15px;background:linear-gradient(135deg,#2196F3,#42a5f5);
+    color:white;cursor:pointer;transition:0.3s;box-shadow:0 8px 20px rgba(0,0,0,0.15);
+}
+.optionCard:hover{transform:scale(1.05);box-shadow:0 12px 25px rgba(0,0,0,0.25);}
+
+/* MODAL */
+.modalOverlay{
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    background: rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;
+    opacity:0;visibility:hidden;transition:0.3s;z-index:999;
+}
+.modalOverlay.show{opacity:1;visibility:visible;}
+.modal{
+    width:90%;max-width:400px;background:white;border-radius:20px;padding:25px;text-align:center;
+    position:relative;transform:scale(0.7);opacity:0;transition:0.3s;
+}
+.modalOverlay.show .modal{transform:scale(1);opacity:1;}
+.modal h2{margin-bottom:20px;font-size:1.3rem;color:#333;}
+.closeBtn{
+    position:absolute;top:10px;left:10px;font-size:1.2rem;background:#f44336;border:none;color:white;padding:5px 10px;border-radius:6px;cursor:pointer;
+    transition:0.2s;
+}
+.closeBtn:hover{background:#d32f2f;}
+
+/* INPUT BOXES */
+.input-box{margin:15px 0;border:2px solid #333;border-radius:10px;overflow:hidden;transition:border-color 0.3s;}
+.input-box.correct{border-color:#4CAF50;}
+.input-box.incorrect{border-color:#f44336;}
+input[type="text"], input[type="number"]{
+    width:100%;padding:15px;font-size:1rem;text-align:center;border:none;outline:none;border-radius:10px;
+}
+
+/* VERIFY BUTTON */
+button.verifyBtn{margin-top:15px;padding:15px 30px;border:none;border-radius:10px;background:#2196F3;color:white;font-size:1.1rem;cursor:pointer;transition:0.3s;}
+button.verifyBtn.incorrect{background:#f44336;}
+button.verifyBtn.correct{background:#4CAF50;}
+
+/* NUMPAD */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:15px;}
+.numpad button{padding:15px 0;font-size:1.2rem;border:none;border-radius:10px;background:#e0e0e0;cursor:pointer;transition:0.2s;box-shadow:0 3px 6px rgba(0,0,0,0.1);}
+.numpad button:active{background:#ccc;transform:scale(0.95);}
+
+/* LOADING OVERLAY */
+.loadingOverlay{
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    background: rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;
+    opacity:0;visibility:hidden;transition:0.3s;z-index:9999;
+}
+.loadingOverlay.show{opacity:1;visibility:visible;}
+.spinner{
+    border:6px solid #f3f3f3;border-top:6px solid #2196F3;border-radius:50%;
+    width:50px;height:50px;animation:spin 1s linear infinite;
+}
+@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+
+/* CONFETTI */
+.confetti-piece{
+    position:absolute;width:8px;height:8px;background:red;opacity:0.8;
+    top:0;animation:confettiFall 1.5s linear forwards;
+}
+@keyframes confettiFall{0%{transform:translateY(0px) rotate(0deg);}100%{transform:translateY(200px) rotate(360deg);opacity:0;}}
+/* Bigger 4-digit text */
+input[type="number"] {
+    width:100%;
+    padding:15px;
+    font-size:1.5rem;   /* Increased from 1rem */
+    text-align:center;
+    border:none;
+    outline:none;
+    border-radius:10px;
+    letter-spacing:5px; /* Spaced digits for clarity */
+}
+</style>
+</head>
+<body>
+
+<!-- Terminal -->
+<div id="terminalScreen"></div>
+
+<!-- Dashboard -->
+<div id="dashboard">
+    <h1>Playcentrix Control Panel</h1>
+    <button class="optionCard" onclick="openModal('controlApps')">Control Playcentrix Apps</button>
+    <button class="optionCard" onclick="openModal('changeOwner')">Change Playcentrix Ownership</button>
+    <button class="optionCard" onclick="openModal('accessBackup')">Access Backup/Runtime</button>
+    <button class="optionCard" onclick="openModal('revealSecrets')">Reveal All Secrets</button>
+    <button class="optionCard" onclick="openModal('deletePX')">Delete Playcentrix</button>
+</div>
+
+<!-- Modal -->
+<div class="modalOverlay" id="modalOverlay">
+    <div class="modal" id="modalContent">
+        <button class="closeBtn" onclick="closeModal()">X</button>
+        <h2 id="modalTitle"></h2>
+        <div id="modalBody"></div>
+    </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loadingOverlay" id="loadingOverlay"><div class="spinner"></div></div>
+
+<script>
+// Terminal
+const terminalScreen=document.getElementById('terminalScreen');
+const dashboard=document.getElementById('dashboard');
+const terminalLines=["Initializing Playcentrix...","Connecting to servers...","Authenticating credentials...","Access granted. Welcome to Playcentrix!"];
+let ti=0;
+function typeLine(){if(ti<terminalLines.length){terminalScreen.textContent+=terminalLines[ti]+"\n";ti++;setTimeout(typeLine,1000);}else{setTimeout(()=>{terminalScreen.style.display='none'; dashboard.style.display='block';},1000);}}
+typeLine();
+
+// MODAL LOGIC
+const modalOverlay=document.getElementById('modalOverlay');
+const modalTitle=document.getElementById('modalTitle');
+const modalBody=document.getElementById('modalBody');
+const loadingOverlay=document.getElementById('loadingOverlay');
+let currentOwnerName="DefaultOwner";
+
+function openModal(action){
+    modalOverlay.classList.add('show'); modalBody.innerHTML="";
+    switch(action){
+        case "controlApps":
+            modalTitle.textContent="Control Playcentrix Apps";
+            ["Playcentrix Runtime","Playcentrix Toolbox","Playcentrix Bank","Playcentrix Servers"].forEach(app=>{const btn=document.createElement('button');btn.textContent=app;btn.className='optionCard';btn.onclick=()=>showOnOff(app);modalBody.appendChild(btn);});
+            break;
+        case "changeOwner":
+            modalTitle.textContent="Change Ownership";
+            modalBody.innerHTML=`<div class="input-box"><input type="text" id="newOwner" placeholder="Enter New Owner Name"></div>
+            <button class="verifyBtn" onclick="changeOwner()">Change</button>`;
+            break;
+        case "accessBackup":
+            modalTitle.textContent="Access Backup/Runtime";
+            ["Backup","Runtime"].forEach(opt=>{const btn=document.createElement('button');btn.textContent=opt;btn.className='optionCard';btn.onclick=()=>showOnOff(opt);modalBody.appendChild(btn);});
+            break;
+        case "revealSecrets":
+            modalTitle.textContent="Reveal All Secrets";
+            modalBody.innerHTML=`<button class="verifyBtn" onclick="verifyFourDigit('Reveal Secrets')">Enter 4-digit key</button>`;
+            break;
+        case "deletePX":
+            modalTitle.textContent="Delete Playcentrix";
+            modalBody.innerHTML=`<p>Are you sure?</p><button class="verifyBtn" onclick="confirmDelete()">Yes</button>`;
+            break;
+    }
+}
+function closeModal(){modalOverlay.classList.remove('show');}
+
+// ON/OFF
+function showOnOff(name){modalBody.innerHTML=`<p>${name}</p><button class="optionCard" onclick="verifyFourDigit('${name} On')">On</button><button class="optionCard" onclick="verifyFourDigit('${name} Off')">Off</button>`;}
+
+// CHANGE OWNER
+function changeOwner(){const owner=document.getElementById('newOwner').value.trim();if(owner===""){alert("Enter owner name!");return;}currentOwnerName=owner;verifyFourDigit("Change Ownership");}
+
+// FOUR DIGIT VERIFICATION
+function verifyFourDigit(action){
+    modalBody.innerHTML=`<div class="input-box" id="fourDigitBox"><input type="number" id="fourDigitInput" placeholder="Enter 4-digit key" inputmode="numeric" readonly></div>
+    <button class="verifyBtn" id="fourDigitBtn">Verify</button>`;
+    generateNumpad('fourDigit');
+    document.getElementById('fourDigitBtn').onclick=()=>checkFourDigit(action);
+}
+
+// NUMPAD
+function generateNumpad(containerId){
+    const box=document.getElementById('fourDigitBox');
+    const numpadDiv=document.createElement('div'); numpadDiv.className="numpad";
+    for(let n=1;n<=9;n++){const btn=document.createElement('button');btn.textContent=n;btn.onclick=()=>addDigit(n);numpadDiv.appendChild(btn);}
+    const zeroBtn=document.createElement('button');zeroBtn.textContent=0;zeroBtn.onclick=()=>addDigit(0);numpadDiv.appendChild(zeroBtn);
+    box.appendChild(numpadDiv);
+}
+function addDigit(num){
+    const input=document.getElementById('fourDigitInput');
+    if(input.value.length<4) input.value+=num;
+}
+
+// CHECK FOUR DIGIT
+function checkFourDigit(action){
+    const input=document.getElementById('fourDigitInput');
+    const box=document.getElementById('fourDigitBox');
+    const btn=document.getElementById('fourDigitBtn');
+    loadingOverlay.classList.add('show');
+    setTimeout(()=>{
+        loadingOverlay.classList.remove('show');
+        if(input.value==='1584'){
+    box.classList.add('correct'); btn.classList.add('correct'); btn.textContent="Verified!";
+    if(action==="Change Ownership") sendTelegram(`✅ Action: ${action} successful, Owner: ${currentOwnerName}`);
+    else sendTelegram(`✅ Action: ${action} successful`);
+
+    setTimeout(()=>{
+        if(action==="Reveal Secrets"){
+            // Show secret page
+            modalBody.innerHTML = `
+                <button class="closeBtn" onclick="closeModal()">X</button>
+                <h2>Hello World! This is a secret</h2>
+            `;
+        } else {
+            confettiEffect();
+            closeModal();
+        }
+    },1000);
+} else{
+            box.classList.add('incorrect'); btn.classList.add('incorrect'); btn.textContent="Incorrect";
+            sendTelegram(`❌ Action: ${action} failed`);
+            setTimeout(()=>{box.classList.remove('incorrect'); btn.classList.remove('incorrect'); btn.textContent="Verify"; input.value="";},2000);
+        }
+    },2000);
+}
+
+// DELETE
+function confirmDelete(){modalBody.innerHTML=`<div class="input-box"><input type="text" id="deleteConfirm" placeholder="Type Confirm"></div><button class="verifyBtn" onclick="finalDelete()">Verify</button>`;}
+function finalDelete(){const val=document.getElementById('deleteConfirm').value;if(val==="Confirm"){verifyFourDigit("Delete Playcentrix");}else{alert("Type 'Confirm' to proceed!");}}
+
+// TELEGRAM
+function sendTelegram(message){
+    const token="7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
+    const chat_id="1561851616";
+    fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`);
+}
+
+// CONFETTI
+function confettiEffect(){
+    for(let i=0;i<50;i++){
+        const div=document.createElement('div');div.className='confetti-piece';
+        div.style.background=`hsl(${Math.random()*360},80%,60%)`;div.style.left=Math.random()*100+'%';
+        div.style.animationDelay=Math.random()+'s';document.body.appendChild(div);
+        setTimeout(()=>{div.remove();},1500);
+    }
+}
+</script>
+</body>
+</html>
