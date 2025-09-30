@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playcentrix Top SECRET</title>
+<style>
+    /* Reset default zoom and selection */
+    * {
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html, body {
+        font-family: 'Arial', sans-serif;
+        height: 100%;
+        background-color: #f5f5f5;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .container {
+        width: 90%;
+        max-width: 400px;
+        background: #ffffff;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+        color: #333;
+    }
+
+    .captcha-box {
+        font-size: 2rem;
+        color: #333;
+        background: #e0e0e0;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        filter: blur(2px);
+        letter-spacing: 2px;
+    }
+
+    input[type="text"] {
+        width: 100%;
+        padding: 15px;
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+        text-align: center;
+        border-radius: 10px;
+        border: 1px solid #ccc;
+    }
+
+    .numpad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .numpad button {
+        padding: 20px;
+        font-size: 1.2rem;
+        border: none;
+        border-radius: 10px;
+        background-color: #4CAF50;
+        color: white;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .numpad button:hover {
+        background-color: #45a049;
+    }
+
+    #verifyBtn {
+        padding: 15px 30px;
+        font-size: 1.2rem;
+        border: none;
+        border-radius: 10px;
+        background-color: #2196F3;
+        color: white;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    #verifyBtn:hover {
+        background-color: #1976d2;
+    }
+
+    #message {
+        font-size: 1rem;
+        margin-top: 15px;
+        color: red;
+    }
+
+    /* Disable zooming */
+    input, button {
+        touch-action: manipulation;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Playcentrix Top SECRET</h1>
+    <div class="captcha-box" id="captcha">0 + 0</div>
+    <input type="text" id="userInput" readonly placeholder="Enter answer">
+    
+    <div class="numpad">
+        <button onclick="pressKey('1')">1</button>
+        <button onclick="pressKey('2')">2</button>
+        <button onclick="pressKey('3')">3</button>
+        <button onclick="pressKey('4')">4</button>
+        <button onclick="pressKey('5')">5</button>
+        <button onclick="pressKey('6')">6</button>
+        <button onclick="pressKey('7')">7</button>
+        <button onclick="pressKey('8')">8</button>
+        <button onclick="pressKey('9')">9</button>
+        <button onclick="pressKey('0')">0</button>
+        <button onclick="clearInput()">C</button>
+        <button onclick="backspace()">←</button>
+    </div>
+
+    <button id="verifyBtn" onclick="verifyCaptcha()">Verify</button>
+    <div id="message"></div>
+</div>
+
+<script>
+    let captchaAnswer = 0;
+
+    function generateCaptcha() {
+        const a = Math.floor(Math.random() * 20);
+        const b = Math.floor(Math.random() * 20);
+        const operator = Math.random() < 0.5 ? '+' : '-';
+        captchaAnswer = operator === '+' ? a + b : a - b;
+        document.getElementById('captcha').textContent = `${a} ${operator} ${b}`;
+        document.getElementById('message').textContent = '';
+        document.getElementById('userInput').value = '';
+    }
+
+    function pressKey(num) {
+        const input = document.getElementById('userInput');
+        input.value += num;
+    }
+
+    function clearInput() {
+        document.getElementById('userInput').value = '';
+    }
+
+    function backspace() {
+        const input = document.getElementById('userInput');
+        input.value = input.value.slice(0, -1);
+    }
+
+    function verifyCaptcha() {
+        const input = document.getElementById('userInput').value;
+        const message = document.getElementById('message');
+
+        message.style.color = 'blue';
+        message.textContent = 'Verifying...';
+
+        setTimeout(() => {
+            if (parseInt(input) === captchaAnswer) {
+                window.location.href = 'Cre.html';
+            } else {
+                message.style.color = 'red';
+                message.textContent = 'Incorrect! New captcha generated.';
+                generateCaptcha();
+            }
+        }, 3000);
+    }
+
+    // Initialize captcha on page load
+    generateCaptcha();
+</script>
+
+</body>
+</html>
