@@ -3,103 +3,100 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Playcentrix Passkey Security Verification</title>
+<title>Playcentrix Security Verification</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
     :root {
-        --ios-bg: #000000;
-        --ios-card-bg: rgba(28, 28, 30, 0.72);
+        --ios-bg: #030712;
+        --ios-card-bg: rgba(23, 25, 35, 0.68);
         --ios-card-border: rgba(255, 255, 255, 0.12);
         --ios-accent: #0A84FF;
-        --ios-accent-glow: rgba(10, 132, 255, 0.35);
+        --ios-accent-glow: rgba(10, 132, 255, 0.4);
         --ios-success: #30D158;
-        --ios-success-glow: rgba(48, 209, 88, 0.35);
+        --ios-success-glow: rgba(48, 209, 88, 0.4);
         --ios-error: #FF453A;
-        --ios-key-bg: rgba(255, 255, 255, 0.08);
-        --ios-key-active: rgba(255, 255, 255, 0.22);
+        --ios-key-bg: rgba(255, 255, 255, 0.07);
+        --ios-key-active: rgba(255, 255, 255, 0.25);
         --ios-text-primary: #FFFFFF;
-        --ios-text-secondary: rgba(235, 235, 245, 0.6);
-        --ios-text-tertiary: rgba(235, 235, 245, 0.38);
+        --ios-text-secondary: rgba(235, 235, 245, 0.65);
+        --ios-text-tertiary: rgba(235, 235, 245, 0.4);
     }
 
-    * {
-        user-select: none;
-        -webkit-user-select: none;
-        -webkit-tap-highlight-color: transparent;
-        box-sizing: border-box;
+    /* Prevent all scrollbars, selection, and touch gestures */
+    html, body {
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        overflow: hidden;
+        position: fixed;
+        top: 0;
+        left: 0;
         margin: 0;
         padding: 0;
-    }
-
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
         background-color: var(--ios-bg);
-        color: var(--ios-text-primary);
-        min-height: 100dvh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow-x: hidden;
-        position: relative;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
     }
 
-    /* Ambient background gradient mesh */
-    .ambient-glow {
+    /* Ambient iOS 18 background mesh */
+    .ambient-mesh {
         position: fixed;
-        width: 100vw;
-        height: 100vh;
-        top: 0;
-        left: 0;
+        inset: 0;
         z-index: 0;
         pointer-events: none;
         background: 
-            radial-gradient(circle at 20% 20%, rgba(10, 132, 255, 0.18) 0%, transparent 50%),
-            radial-gradient(circle at 80% 80%, rgba(191, 90, 242, 0.15) 0%, transparent 50%),
-            radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.8) 0%, #000000 100%);
+            radial-gradient(circle at 15% 15%, rgba(10, 132, 255, 0.22) 0%, transparent 45%),
+            radial-gradient(circle at 85% 80%, rgba(147, 51, 234, 0.18) 0%, transparent 50%),
+            radial-gradient(circle at 50% 50%, rgba(3, 7, 18, 0.85) 0%, #030712 100%);
     }
 
-    .ios-card {
+    .glass-card {
         position: relative;
         z-index: 10;
         width: 100%;
-        max-width: 420px;
-        min-height: 100dvh;
+        max-width: 400px;
+        height: 100dvh;
+        max-height: 100dvh;
         background: var(--ios-card-bg);
-        backdrop-filter: blur(40px) saturate(200%);
-        -webkit-backdrop-filter: blur(40px) saturate(200%);
+        backdrop-filter: blur(45px) saturate(210%);
+        -webkit-backdrop-filter: blur(45px) saturate(210%);
         border: 1px solid var(--ios-card-border);
-        padding: 24px 24px calc(24px + env(safe-area-inset-bottom)) 24px;
+        padding: 20px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         align-items: center;
-        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    @media (min-height: 700px) and (min-width: 480px) {
-        .ios-card {
-            min-height: auto;
-            border-radius: 38px;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
-            margin: 20px;
+    @media (min-height: 680px) and (min-width: 420px) {
+        .glass-card {
+            height: auto;
+            max-height: 92dvh;
+            border-radius: 36px;
+            margin: auto;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.12);
         }
     }
 
-    .ring-container {
+    /* Biometric animated ring header */
+    .ring-wrapper {
         position: relative;
-        width: 110px;
-        height: 110px;
+        width: 96px;
+        height: 96px;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 8px;
     }
 
     canvas#biometricCanvas {
         position: absolute;
-        top: 0;
-        left: 0;
+        inset: 0;
         width: 100%;
         height: 100%;
         z-index: 1;
@@ -108,45 +105,52 @@
     .shield-badge {
         position: relative;
         z-index: 2;
-        width: 64px;
-        height: 64px;
+        width: 58px;
+        height: 58px;
         border-radius: 50%;
         background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.18);
         display: flex;
         align-items: center;
         justify-content: center;
+        backdrop-filter: blur(10px);
         box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
-        transition: all 0.3s ease;
+        transition: all 0.35s ease;
     }
 
-    .challenge-box {
+    .challenge-card {
         width: 100%;
-        background: rgba(0, 0, 0, 0.35);
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 12px 16px;
+        background: rgba(10, 14, 26, 0.55);
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        padding: 14px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 8px;
-        position: relative;
-        overflow: hidden;
+        gap: 10px;
+        box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
     }
 
-    canvas#captchaCanvas {
+    canvas#mathCanvas {
         width: 100%;
-        height: 60px;
-        border-radius: 12px;
+        height: 64px;
+        border-radius: 14px;
         display: block;
     }
 
-    .pin-dots-container {
+    /* PIN Dots Display */
+    .pin-display-box {
+        position: relative;
         display: flex;
-        gap: 16px;
         align-items: center;
         justify-content: center;
-        margin: 14px 0;
+        gap: 16px;
+        min-height: 48px;
+        padding: 6px 20px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: all 0.3s ease;
     }
 
     .pin-dot {
@@ -155,45 +159,45 @@
         border-radius: 50%;
         border: 2px solid var(--ios-text-secondary);
         background: transparent;
-        transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    .pin-dot.active {
+    .pin-dot.filled {
         background: var(--ios-text-primary);
         border-color: var(--ios-text-primary);
-        box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
         transform: scale(1.15);
-    }
-
-    .pin-dot.error {
-        background: var(--ios-error);
-        border-color: var(--ios-error);
-        box-shadow: 0 0 12px rgba(255, 69, 58, 0.6);
     }
 
     .pin-dot.success {
         background: var(--ios-success);
         border-color: var(--ios-success);
-        box-shadow: 0 0 12px rgba(48, 209, 88, 0.6);
+        box-shadow: 0 0 14px var(--ios-success-glow);
+    }
+
+    .pin-dot.error {
+        background: var(--ios-error);
+        border-color: var(--ios-error);
+        box-shadow: 0 0 14px rgba(255, 69, 58, 0.6);
     }
 
     .keypad-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 14px 20px;
+        gap: 12px 18px;
         width: 100%;
-        max-width: 320px;
+        max-width: 300px;
         margin: 0 auto;
     }
 
     .key-btn {
-        width: 72px;
-        height: 72px;
+        width: 68px;
+        height: 68px;
         border-radius: 50%;
         background: var(--ios-key-bg);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         color: var(--ios-text-primary);
-        font-size: 1.75rem;
+        font-size: 1.65rem;
         font-weight: 400;
         display: flex;
         flex-direction: column;
@@ -202,18 +206,18 @@
         cursor: pointer;
         margin: 0 auto;
         transition: background 0.15s ease, transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1);
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     }
 
     .key-btn:active {
         background: var(--ios-key-active);
-        transform: scale(0.92);
+        transform: scale(0.91);
     }
 
-    .key-btn span.letters {
-        font-size: 0.65rem;
+    .key-btn span.subtext {
+        font-size: 0.62rem;
         letter-spacing: 2px;
         font-weight: 600;
         color: var(--ios-text-tertiary);
@@ -221,68 +225,40 @@
         text-transform: uppercase;
     }
 
-    .key-btn.action-key {
-        font-size: 1.1rem;
+    .key-btn.action-btn {
+        font-size: 0.95rem;
+        font-weight: 500;
         background: transparent;
         border-color: transparent;
         box-shadow: none;
+        color: var(--ios-text-secondary);
     }
 
-    .key-btn.action-key:active {
+    .key-btn.action-btn:active {
         background: rgba(255, 255, 255, 0.1);
+        color: #fff;
     }
 
-    #verifyBtn {
-        width: 100%;
-        max-width: 320px;
-        height: 52px;
-        border-radius: 26px;
-        background: var(--ios-accent);
-        color: #FFFFFF;
-        font-size: 1rem;
-        font-weight: 600;
-        border: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        box-shadow: 0 8px 24px var(--ios-accent-glow);
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        margin-top: 10px;
-    }
-
-    #verifyBtn:active {
-        transform: scale(0.97);
-        opacity: 0.9;
-    }
-
-    #verifyBtn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        box-shadow: none;
-    }
-
-    /* Shake animation */
+    /* iOS Shake Animation */
     .shake {
-        animation: ios-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        animation: ios-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
     }
 
     @keyframes ios-shake {
-        10%, 90% { transform: translate3d(-2px, 0, 0); }
-        20%, 80% { transform: translate3d(4px, 0, 0); }
-        30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
-        40%, 60% { transform: translate3d(6px, 0, 0); }
+        10%, 90% { transform: translate3d(-3px, 0, 0); }
+        20%, 80% { transform: translate3d(5px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-7px, 0, 0); }
+        40%, 60% { transform: translate3d(7px, 0, 0); }
     }
 
-    /* Spinner animation */
+    /* Loading Spinner */
     .ios-spinner {
-        width: 20px;
-        height: 20px;
-        border: 2.5px solid rgba(255, 255, 255, 0.25);
-        border-top-color: #ffffff;
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        border-top-color: var(--ios-accent);
         border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+        animation: spin 0.75s linear infinite;
     }
 
     @keyframes spin {
@@ -290,21 +266,21 @@
     }
 </style>
 </head>
-<body>
+<body class="flex items-center justify-center">
 
-<div class="ambient-glow"></div>
+<!-- Ambient Mesh Background -->
+<div class="ambient-mesh"></div>
 
-<div class="ios-card" id="cardContainer">
+<div class="glass-card" id="cardContainer">
     
-    <!-- Header with Biometric Ring Visualizer -->
-    <div class="w-full flex flex-col items-center">
-        <!-- iOS Drag Handle Indicator for mobile sheet look -->
+    <!-- Top Header & Dynamic Ring -->
+    <div class="w-full flex flex-col items-center mt-1">
         <div class="w-9 h-1 bg-white/20 rounded-full mb-3 md:hidden"></div>
 
-        <div class="ring-container">
-            <canvas id="biometricCanvas" width="220" height="220"></canvas>
+        <div class="ring-wrapper">
+            <canvas id="biometricCanvas" width="192" height="192"></canvas>
             <div class="shield-badge" id="shieldBadge">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="shieldIcon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" id="shieldIcon">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     <path d="M12 8v4"></path>
                     <path d="M12 16h.01"></path>
@@ -312,56 +288,64 @@
             </div>
         </div>
 
-        <h1 class="text-xl font-semibold tracking-tight text-white mt-3">Playcentrix Passkey</h1>
-        <p class="text-xs text-white/60 text-center mt-1 font-normal">Security Check & Behavioral Verification</p>
+        <h1 class="text-lg font-semibold tracking-tight text-white mt-2.5">Playcentrix Passkey</h1>
+        
+        <!-- Status Indicator Pill -->
+        <div class="flex items-center gap-1.5 mt-1 px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/10">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-[11px] text-white/70 font-medium">Quick Verification</span>
+        </div>
     </div>
 
-    <div class="w-full my-2">
-        <div class="challenge-box">
+    <!-- Math Challenge Box -->
+    <div class="w-full my-auto">
+        <div class="challenge-card">
             <div class="w-full flex items-center justify-between text-[11px] font-medium text-white/50 px-1">
-                <span class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Dynamic Passcode Challenge
-                </span>
-                <button onclick="refreshChallenge()" class="hover:text-white transition-colors flex items-center gap-1 text-[11px] text-blue-400 font-semibold" title="Generate New Challenge">
+                <span>Solve Math Equation</span>
+                <button onclick="refreshMathChallenge()" class="hover:text-white transition-colors flex items-center gap-1 text-[11px] text-blue-400 font-semibold active:opacity-60" title="Get New Problem">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-                    Refresh
+                    New Challenge
                 </button>
             </div>
             
-            <canvas id="captchaCanvas" width="320" height="60"></canvas>
+            <canvas id="mathCanvas" width="320" height="64"></canvas>
             
-            <div class="text-[11px] text-white/40 text-center">
-                Enter the passcode sequence displayed above using keypad
+            <div class="text-[11px] text-white/40 text-center font-normal">
+                Type the answer using the keypad. Verification is automatic.
             </div>
         </div>
     </div>
 
-    <div class="w-full flex flex-col items-center">
-        <div class="pin-dots-container" id="pinDots">
-            <div class="pin-dot"></div>
-            <div class="pin-dot"></div>
-            <div class="pin-dot"></div>
-            <div class="pin-dot"></div>
+    <!-- Input Dots & Status Feedback -->
+    <div class="w-full flex flex-col items-center my-2">
+        <div class="pin-display-box" id="pinDisplay">
+            <div class="pin-dots-container flex gap-3" id="pinDots">
+                <!-- Dots generated dynamically based on answer length -->
+            </div>
+            <div id="verifyingSpinner" class="hidden">
+                <div class="ios-spinner"></div>
+            </div>
         </div>
-        <div id="statusMessage" class="text-xs font-medium text-white/50 h-4 transition-all duration-200 text-center">
-            Secured by Playcentrix Shield
+        
+        <div id="statusMessage" class="text-xs font-medium text-white/50 h-5 mt-2 transition-all duration-200 text-center flex items-center gap-1.5">
+            <span>Enter answer to continue</span>
         </div>
     </div>
 
-    <div class="keypad-grid my-2">
-        <button class="key-btn" onclick="handleInput('1')">1<span class="letters">&nbsp;</span></button>
-        <button class="key-btn" onclick="handleInput('2')">2<span class="letters">ABC</span></button>
-        <button class="key-btn" onclick="handleInput('3')">3<span class="letters">DEF</span></button>
-        <button class="key-btn" onclick="handleInput('4')">4<span class="letters">GHI</span></button>
-        <button class="key-btn" onclick="handleInput('5')">5<span class="letters">JKL</span></button>
-        <button class="key-btn" onclick="handleInput('6')">6<span class="letters">MNO</span></button>
-        <button class="key-btn" onclick="handleInput('7')">7<span class="letters">PQRS</span></button>
-        <button class="key-btn" onclick="handleInput('8')">8<span class="letters">TUV</span></button>
-        <button class="key-btn" onclick="handleInput('9')">9<span class="letters">WXYZ</span></button>
-        <button class="key-btn action-key text-white/60 font-medium" onclick="clearInput()">Clear</button>
-        <button class="key-btn" onclick="handleInput('0')">0<span class="letters">+</span></button>
-        <button class="key-btn action-key" onclick="deleteInput()">
+    <!-- iOS Numpad -->
+    <div class="keypad-grid mb-1">
+        <button class="key-btn" onclick="handleNumpadInput('1')">1<span class="subtext">&nbsp;</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('2')">2<span class="subtext">ABC</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('3')">3<span class="subtext">DEF</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('4')">4<span class="subtext">GHI</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('5')">5<span class="subtext">JKL</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('6')">6<span class="subtext">MNO</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('7')">7<span class="subtext">PQRS</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('8')">8<span class="subtext">TUV</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('9')">9<span class="subtext">WXYZ</span></button>
+        <button class="key-btn action-btn" onclick="clearInput()">Clear</button>
+        <button class="key-btn" onclick="handleNumpadInput('0')">0<span class="subtext">+</span></button>
+        <button class="key-btn action-btn" onclick="deleteInput()" aria-label="Delete">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
                 <line x1="18" y1="9" x2="12" y2="15"></line>
@@ -370,32 +354,44 @@
         </button>
     </div>
 
-    <div class="w-full flex flex-col items-center gap-2">
-        <button id="verifyBtn" onclick="verifySecurityCode()">
-            <span>Authenticate Identity</span>
-        </button>
-        <div class="text-[10px] text-white/30 tracking-wider uppercase font-semibold mt-1">
-            
-        </div>
+    <!-- Footer Lock Badge -->
+    <div class="text-[10px] text-white/30 tracking-wider uppercase font-semibold text-center mb-1 flex items-center justify-center gap-1">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Protected by Playcentrix Shield
     </div>
 
 </div>
 
 <script>
-    let passcodeTarget = "";
-    let userEnteredPasscode = "";
-    const REQUIRED_LENGTH = 4;
+    /* Strict Mobile Lock Settings (Prevent zoom & scroll) */
+    let lastTouchEnd = 0;
+    
+    // Prevent double-tap zooming on iOS
+    document.addEventListener('touchend', function (e) {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 280) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
+
+    // Prevent pinch zoom gestures
+    document.addEventListener('gesturestart', function (e) {
+        e.preventDefault();
+    });
+
+    // Prevent touch dragging / scrolling
+    document.addEventListener('touchmove', function (e) {
+        e.preventDefault();
+    }, { passive: false });
+
+    /* Application State */
+    let mathAnswerTarget = "";
+    let userEnteredInput = "";
+    let targetLength = 2;
     let isVerifying = false;
 
-    // Behavioral Telemetry Engine state
-    const telemetry = {
-        touchCadence: [],
-        lastTapTime: 0,
-        touchJitter: 0,
-        pointerEventsCount: 0,
-        microShakeDeltas: []
-    };
-
+    /* Web Audio Engine */
     let audioCtx = null;
 
     function initAudio() {
@@ -407,242 +403,205 @@
         }
     }
 
-    function playAudioTone(type) {
+    function playSound(type) {
         try {
             initAudio();
             if (!audioCtx) return;
 
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
             const now = audioCtx.currentTime;
 
             if (type === 'tap') {
-                // Soft iOS key click
+                // Soft tactile iOS tap
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(1400, now);
-                osc.frequency.exponentialRampToValueAtTime(300, now + 0.03);
+                osc.frequency.setValueAtTime(1200, now);
+                osc.frequency.exponentialRampToValueAtTime(320, now + 0.03);
                 gain.gain.setValueAtTime(0.12, now);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+
                 osc.start(now);
                 osc.stop(now + 0.03);
             } else if (type === 'success') {
-                // Dual tone iOS success chime
-                const osc2 = audioCtx.createOscillator();
-                const gain2 = audioCtx.createGain();
-                osc2.connect(gain2);
-                gain2.connect(audioCtx.destination);
+                // Harmonized iOS success chime
+                const createNote = (freq, startTime, duration) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
 
-                osc.type = 'sine';
-                osc2.type = 'sine';
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, startTime);
 
-                osc.frequency.setValueAtTime(523.25, now); // C5
-                osc2.frequency.setValueAtTime(659.25, now + 0.08); // E5
+                    gain.gain.setValueAtTime(0.22, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                };
 
-                gain2.gain.setValueAtTime(0.25, now + 0.08);
-                gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-
-                osc.start(now);
-                osc.stop(now + 0.25);
-                osc2.start(now + 0.08);
-                osc2.stop(now + 0.35);
+                createNote(523.25, now, 0.22);       // C5
+                createNote(659.25, now + 0.07, 0.28); // E5
+                createNote(783.99, now + 0.14, 0.35); // G5
             } else if (type === 'error') {
-                // Low frequency error thud
+                // Low error thud
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(180, now);
-                osc.frequency.exponentialRampToValueAtTime(60, now + 0.18);
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                osc.frequency.setValueAtTime(170, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+
+                gain.gain.setValueAtTime(0.28, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
                 osc.start(now);
-                osc.stop(now + 0.18);
+                osc.stop(now + 0.2);
             }
         } catch (e) {
-            // Audio context fallback gracefully handles silent mode
+            // Audio fallback
         }
     }
 
-    function registerTelemetryEvent(e) {
-        telemetry.pointerEventsCount++;
-        const now = Date.now();
-
-        if (telemetry.lastTapTime > 0) {
-            const interval = now - telemetry.lastTapTime;
-            telemetry.touchCadence.push(interval);
-        }
-        telemetry.lastTapTime = now;
-
-        // Collect spatial touch jitter / movement variance
-        if (e.type === 'touchmove' || e.type === 'mousemove') {
-            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-            if (clientX && clientY) {
-                telemetry.microShakeDeltas.push({ x: clientX, y: clientY, t: now });
-                if (telemetry.microShakeDeltas.length > 30) telemetry.microShakeDeltas.shift();
-            }
-        }
-    }
-
-    window.addEventListener('touchmove', registerTelemetryEvent, { passive: true });
-    window.addEventListener('mousemove', registerTelemetryEvent, { passive: true });
-
-    function calculateHumanScore() {
-        // Evaluate cadence variance (bots click at exact equal frequency)
-        if (telemetry.touchCadence.length >= 2) {
-            let totalDiff = 0;
-            for (let i = 1; i < telemetry.touchCadence.length; i++) {
-                totalDiff += Math.abs(telemetry.touchCadence[i] - telemetry.touchCadence[i - 1]);
-            }
-            const avgVariance = totalDiff / (telemetry.touchCadence.length - 1);
-            // Humans typically have >15ms interval delta variance
-            if (avgVariance > 12) return true;
-        }
-
-        // Evaluate cursor/touch spatial jitter
-        if (telemetry.microShakeDeltas.length > 3) return true;
-
-        // Default verification check for valid user interaction
-        return telemetry.pointerEventsCount > 2;
-    }
-
+    /* Biometric Glowing Ring Animation */
     const bioCanvas = document.getElementById('biometricCanvas');
     const bioCtx = bioCanvas.getContext('2d');
-    let angleOffset = 0;
+    let ringAngle = 0;
 
-    function animateBiometricRing() {
+    function renderBiometricRing() {
         bioCtx.clearRect(0, 0, bioCanvas.width, bioCanvas.height);
-        const centerX = bioCanvas.width / 2;
-        const centerY = bioCanvas.height / 2;
-        const radius = 92;
+        const cx = bioCanvas.width / 2;
+        const cy = bioCanvas.height / 2;
+        const radius = 80;
 
-        // Outer rotating dashed security ring
+        // Outer rotating dashed ring
         bioCtx.save();
-        bioCtx.translate(centerX, centerY);
-        bioCtx.rotate(angleOffset);
+        bioCtx.translate(cx, cy);
+        bioCtx.rotate(ringAngle);
 
         bioCtx.beginPath();
         bioCtx.arc(0, 0, radius, 0, Math.PI * 2);
-        bioCtx.strokeStyle = 'rgba(10, 132, 255, 0.4)';
+        bioCtx.strokeStyle = 'rgba(10, 132, 255, 0.45)';
         bioCtx.lineWidth = 2.5;
-        bioCtx.setLineDash([12, 10]);
+        bioCtx.setLineDash([10, 8]);
         bioCtx.stroke();
         bioCtx.restore();
 
-        // Inner glowing pulse ring
+        // Inner soft pulse ring
         bioCtx.beginPath();
-        bioCtx.arc(centerX, centerY, radius - 12, 0, Math.PI * 2);
-        bioCtx.strokeStyle = isVerifying ? 'rgba(48, 209, 88, 0.6)' : 'rgba(10, 132, 255, 0.15)';
+        bioCtx.arc(cx, cy, radius - 10, 0, Math.PI * 2);
+        bioCtx.strokeStyle = isVerifying ? 'rgba(48, 209, 88, 0.7)' : 'rgba(10, 132, 255, 0.18)';
         bioCtx.lineWidth = 1.5;
         bioCtx.setLineDash([]);
         bioCtx.stroke();
 
-        angleOffset += isVerifying ? 0.05 : 0.012;
-        requestAnimationFrame(animateBiometricRing);
+        ringAngle += isVerifying ? 0.06 : 0.014;
+        requestAnimationFrame(renderBiometricRing);
     }
 
-    function drawChallengeCanvas() {
-        const canvas = document.getElementById('captchaCanvas');
+    /* Math Problem Generator */
+    function drawMathChallenge() {
+        const canvas = document.getElementById('mathCanvas');
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Generate 4-digit numeric code
-        passcodeTarget = Math.floor(1000 + Math.random() * 9000).toString();
+        // Generate Math Problem (Sum between 12 and 98)
+        const num1 = Math.floor(Math.random() * 45) + 10;
+        const num2 = Math.floor(Math.random() * 45) + 5;
+        const sum = num1 + num2;
 
-        // Background subtle gradient
+        mathAnswerTarget = sum.toString();
+        targetLength = mathAnswerTarget.length;
+
+        // Render input dots matching target length
+        setupPinDots(targetLength);
+
+        // Background texture
         const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        bgGrad.addColorStop(0, '#12161f');
-        bgGrad.addColorStop(1, '#090b10');
+        bgGrad.addColorStop(0, '#0f172a');
+        bgGrad.addColorStop(1, '#090d16');
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Curved noise lines to disrupt OCR scraping
-        ctx.strokeStyle = 'rgba(10, 132, 255, 0.25)';
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 4; i++) {
+        // Decorative subtle grid lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 16) {
             ctx.beginPath();
-            ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
-            ctx.bezierCurveTo(
-                Math.random() * canvas.width, Math.random() * canvas.height,
-                Math.random() * canvas.width, Math.random() * canvas.height,
-                Math.random() * canvas.width, Math.random() * canvas.height
-            );
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
             ctx.stroke();
         }
 
-        // Draw distorted text digits
-        const digits = passcodeTarget.split('');
-        const startX = 60;
-        const spacing = 55;
+        // Draw Math Text
+        const mathText = `${num1} + ${num2} = ?`;
+        ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(10, 132, 255, 0.7)';
+        ctx.shadowBlur = 12;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(mathText, canvas.width / 2, canvas.height / 2);
 
-        digits.forEach((digit, i) => {
-            ctx.save();
-            const x = startX + i * spacing;
-            const y = canvas.height / 2 + (Math.random() * 6 - 3);
-            const angle = (Math.random() - 0.5) * 0.25;
-
-            ctx.translate(x, y);
-            ctx.rotate(angle);
-
-            ctx.font = 'bold 30px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.shadowColor = 'rgba(10, 132, 255, 0.8)';
-            ctx.shadowBlur = 10;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(digit, 0, 0);
-
-            ctx.restore();
-        });
-
-        // Add subtle overlay noise dots
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        for (let i = 0; i < 30; i++) {
+        // Subtle particle noise
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        for (let i = 0; i < 20; i++) {
             ctx.beginPath();
-            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 1.5, 0, Math.PI * 2);
+            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 1.2, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
-    function refreshChallenge() {
-        playAudioTone('tap');
-        clearInput();
-        drawChallengeCanvas();
-        updateStatus('Challenge key updated', 'text-white/50');
+    function setupPinDots(count) {
+        const dotsContainer = document.getElementById('pinDots');
+        dotsContainer.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'pin-dot';
+            dotsContainer.appendChild(dot);
+        }
     }
 
-    function handleInput(val) {
-        if (isVerifying) return;
-        registerTelemetryEvent(event || window.event);
-        playAudioTone('tap');
+    function refreshMathChallenge() {
+        playSound('tap');
+        clearInput();
+        drawMathChallenge();
+        updateStatus('New problem loaded', 'text-white/60');
+    }
 
-        if (userEnteredPasscode.length < REQUIRED_LENGTH) {
-            userEnteredPasscode += val;
+    function handleNumpadInput(digit) {
+        if (isVerifying) return;
+        playSound('tap');
+
+        if (userEnteredInput.length < targetLength) {
+            userEnteredInput += digit;
             updatePinDots();
         }
 
-        // Auto-trigger verification if 4 digits are entered
-        if (userEnteredPasscode.length === REQUIRED_LENGTH) {
-            setTimeout(verifySecurityCode, 150);
+        // Auto-Verify when user reaches target answer length
+        if (userEnteredInput.length === targetLength) {
+            triggerAutoVerification();
         }
     }
 
     function deleteInput() {
         if (isVerifying) return;
-        playAudioTone('tap');
-        if (userEnteredPasscode.length > 0) {
-            userEnteredPasscode = userEnteredPasscode.slice(0, -1);
+        playSound('tap');
+        if (userEnteredInput.length > 0) {
+            userEnteredInput = userEnteredInput.slice(0, -1);
             updatePinDots();
         }
     }
 
     function clearInput() {
         if (isVerifying) return;
-        playAudioTone('tap');
-        userEnteredPasscode = "";
+        playSound('tap');
+        userEnteredInput = "";
         updatePinDots();
     }
 
@@ -650,104 +609,74 @@
         const dots = document.querySelectorAll('.pin-dot');
         dots.forEach((dot, index) => {
             dot.className = 'pin-dot';
-            if (index < userEnteredPasscode.length) {
-                dot.classList.add('active');
+            if (index < userEnteredInput.length) {
+                dot.classList.add('filled');
             }
         });
     }
 
     function updateStatus(text, colorClass) {
         const statusEl = document.getElementById('statusMessage');
-        statusEl.textContent = text;
-        statusEl.className = `text-xs font-medium transition-all duration-200 text-center ${colorClass}`;
+        statusEl.innerHTML = `<span>${text}</span>`;
+        statusEl.className = `text-xs font-medium transition-all duration-200 text-center flex items-center gap-1.5 ${colorClass}`;
     }
 
-    function verifySecurityCode() {
+    function triggerAutoVerification() {
         if (isVerifying) return;
 
-        const verifyBtn = document.getElementById('verifyBtn');
+        isVerifying = true;
+        const spinner = document.getElementById('verifyingSpinner');
         const cardContainer = document.getElementById('cardContainer');
-        const shieldIcon = document.getElementById('shieldIcon');
         const shieldBadge = document.getElementById('shieldBadge');
+        const shieldIcon = document.getElementById('shieldIcon');
         const dots = document.querySelectorAll('.pin-dot');
 
-        if (userEnteredPasscode.length < REQUIRED_LENGTH) {
-            playAudioTone('error');
-            updateStatus('Enter complete 4-digit passcode', 'text-amber-400');
-            cardContainer.classList.add('shake');
-            setTimeout(() => cardContainer.classList.remove('shake'), 450);
-            return;
-        }
-
-        isVerifying = true;
-        verifyBtn.disabled = true;
-        verifyBtn.innerHTML = `<div class="ios-spinner"></div> Authenticating...`;
-        updateStatus('Evaluating biometric signature...', 'text-blue-400');
+        spinner.classList.remove('hidden');
+        updateStatus('Checking answer...', 'text-blue-400');
 
         setTimeout(() => {
-            const isCodeCorrect = (userEnteredPasscode === passcodeTarget);
-            const isHuman = calculateHumanScore();
+            spinner.classList.add('hidden');
 
-            if (isCodeCorrect && isHuman) {
-                // Success State
-                playAudioTone('success');
-                updateStatus('Identity Verified Successfully', 'text-emerald-400 font-semibold');
+            if (userEnteredInput === mathAnswerTarget) {
+                // Success
+                playSound('success');
+                updateStatus('Verification Successful', 'text-emerald-400 font-semibold');
 
-                dots.forEach(d => {
-                    d.className = 'pin-dot success';
-                });
+                dots.forEach(d => d.className = 'pin-dot success');
 
-                shieldBadge.style.borderColor = 'rgba(48, 209, 88, 0.4)';
+                shieldBadge.style.borderColor = 'rgba(48, 209, 88, 0.5)';
                 shieldBadge.style.boxShadow = '0 0 25px rgba(48, 209, 88, 0.4)';
                 shieldIcon.setAttribute('stroke', '#30D158');
+                shieldIcon.innerHTML = `<polyline points="20 6 9 17 4 12"></polyline>`;
 
-                verifyBtn.style.backgroundColor = 'var(--ios-success)';
-                verifyBtn.style.boxShadow = '0 8px 24px var(--ios-success-glow)';
-                verifyBtn.innerHTML = `
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>Authenticated</span>
-                `;
-
+                // Seamless redirect to Cre.html
                 setTimeout(() => {
                     window.location.href = 'Cre.html';
-                }, 750);
+                }, 600);
 
             } else {
-                // Error State
-                playAudioTone('error');
+                // Error
+                playSound('error');
                 isVerifying = false;
-                verifyBtn.disabled = false;
-                verifyBtn.style.backgroundColor = 'var(--ios-accent)';
-                verifyBtn.style.boxShadow = '0 8px 24px var(--ios-accent-glow)';
-                verifyBtn.innerHTML = `<span>Authenticate Identity</span>`;
 
-                dots.forEach(d => {
-                    d.className = 'pin-dot error';
-                });
-
+                dots.forEach(d => d.className = 'pin-dot error');
                 cardContainer.classList.add('shake');
-                setTimeout(() => cardContainer.classList.remove('shake'), 450);
 
-                if (!isCodeCorrect) {
-                    updateStatus('Incorrect passcode. Try again.', 'text-rose-500 font-semibold');
-                } else {
-                    updateStatus('Automated behavior detected.', 'text-rose-500 font-semibold');
-                }
+                updateStatus('Incorrect. Try again.', 'text-rose-400 font-semibold');
 
                 setTimeout(() => {
-                    userEnteredPasscode = "";
-                    updatePinDots();
-                    drawChallengeCanvas();
-                }, 800);
+                    cardContainer.classList.remove('shake');
+                    userEnteredInput = "";
+                    drawMathChallenge();
+                }, 700);
             }
-        }, 850);
+        }, 500);
     }
 
+    /* Window Load Initializer */
     window.onload = () => {
-        animateBiometricRing();
-        drawChallengeCanvas();
+        renderBiometricRing();
+        drawMathChallenge();
     };
 </script>
 </body>
