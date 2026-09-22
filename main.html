@@ -601,102 +601,87 @@ html, body {
 </div>
 
 <script>
-// PRELOAD AUDIO IMMEDIATELY ON LOAD
-const introAudio = new Audio('./MainIntro.mp3');
-introAudio.preload = 'auto';
-introAudio.loop = false;
-introAudio.playsInline = true;
+// ============================================================
+// PLAYCENTRIX REACH - FULL SCRIPT
+// AUDIO SYSTEM:
+//   • Uses ONLY MainIntro.mp3
+//   • NO generated siren / oscillator fallback
+//   • Unlocks Web Audio during the actual touch
+//   • Downloads + decodes MainIntro.mp3 immediately
+//   • Starts the decoded MP3 immediately when verification ends
+//   • Handles iPhone Safari + Android Chrome
+// ============================================================
 
-let audioCtx = null;
+
+// ============================================================
+// ROBUST MAIN AUDIO ENGINE
+// ============================================================
+
+const MAIN_AUDIO_URL = './MainIntro.mp3';
+
+let audioContext = null;
+let decodedMainAudio = null;
+let audioSourceNode = null;
+
 let audioUnlocked = false;
-let audioPlaying = false;
+let audioDecodePromise = null;
+let audioPlayRequested = false;
+let audioStarted = false;
 
-// ============================================================
-// ROBUST AUDIO ERROR HANDLING
-// ============================================================
 
-introAudio.addEventListener('loadstart', () => {
-  console.log('[Audio] Loading MainIntro.mp3...');
-});
+// ------------------------------------------------------------
+// DEVICE DETECTION
+// ------------------------------------------------------------
 
-introAudio.addEventListener('loadedmetadata', () => {
-  console.log('[Audio] Metadata loaded. Duration:', introAudio.duration);
-});
-
-introAudio.addEventListener('canplay', () => {
-  console.log('[Audio] MainIntro.mp3 can play.');
-});
-
-introAudio.addEventListener('canplaythrough', () => {
-  console.log('[Audio] MainIntro.mp3 can play through.');
-});
-
-introAudio.addEventListener('playing', () => {
-  audioPlaying = true;
-  console.log('[Audio] MainIntro.mp3 PLAYING.');
-});
-
-introAudio.addEventListener('pause', () => {
-  audioPlaying = false;
-});
-
-introAudio.addEventListener('ended', () => {
-  audioPlaying = false;
-  console.log('[Audio] MainIntro.mp3 finished.');
-});
-
-introAudio.addEventListener('error', () => {
-  const error = introAudio.error;
-
-  if (!error) {
-    console.error('[Audio] Unknown audio error.');
-    return;
-  }
-
-  const errors = {
-    1: 'MEDIA_ERR_ABORTED - Audio loading was aborted.',
-    2: 'MEDIA_ERR_NETWORK - Network error while loading audio.',
-    3: 'MEDIA_ERR_DECODE - Browser could not decode the MP3.',
-    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Audio file is missing or unsupported.'
-  };
-
-  console.error(
-    '[Audio]',
-    errors[error.code] || 'Unknown media error.',
-    error
+const isIOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (
+    navigator.platform === 'MacIntel' &&
+    navigator.maxTouchPoints > 1
   );
-});
+
+const isAndroid =
+  /Android/i.test(navigator.userAgent);
 
 
-// ============================================================
-// CREATE WEB AUDIO CONTEXT
-// ============================================================
+// ------------------------------------------------------------
+// AUDIO CONTEXT CREATION
+// ------------------------------------------------------------
 
-function createAudioContext() {
+function getAudioContext() {
+
   try {
+
     const AudioContextClass =
       window.AudioContext ||
       window.webkitAudioContext;
 
     if (!AudioContextClass) {
-      console.warn('[Audio] Web Audio API unavailable.');
+
+      console.error(
+        '[Audio] Web Audio API is unavailable.'
+      );
+
       return null;
     }
 
-    if (!audioCtx) {
-      audioCtx = new AudioContextClass();
+    if (!audioContext) {
+
+      audioContext =
+        new AudioContextClass();
 
       console.log(
         '[Audio] AudioContext created:',
-        audioCtx.state
+        audioContext.state
       );
     }
 
-    return audioCtx;
+    return audioContext;
 
   } catch (error) {
+
     console.error(
-      '[Audio] AudioContext creation failed:',
+      '[Audio] Could not create AudioContext:',
       error
     );
 
@@ -705,52 +690,72 @@ function createAudioContext() {
 }
 
 
-// ============================================================
-// IOS / SAFARI AUDIO UNLOCK
-// Called directly from the user's touch event.
-// ============================================================
+// ------------------------------------------------------------
+// UNLOCK AUDIO DURING USER TOUCH
+// ------------------------------------------------------------
 
-function unlockAudio() {
+async function unlockAudioImmediately() {
+
+  const ctx =
+    getAudioContext();
+
+  if (!ctx) {
+    return false;
+  }
+
   try {
-    const ctx = createAudioContext();
 
-    if (!ctx) return false;
+    if (
+      ctx.state === 'suspended' ||
+      ctx.state === 'interrupted'
+    ) {
 
-    if (ctx.state === 'suspended') {
-      ctx.resume()
-        .then(() => {
-          console.log('[Audio] AudioContext resumed.');
-        })
-        .catch(error => {
-          console.error(
-            '[Audio] AudioContext resume failed:',
-            error
-          );
-        });
+      await ctx.resume();
+
+      console.log(
+        '[Audio] AudioContext resumed:',
+        ctx.state
+      );
     }
 
-    // Silent Web Audio buffer used to unlock iOS audio.
-    const buffer = ctx.createBuffer(
-      1,
-      1,
-      22050
+
+    // Small silent buffer.
+    // This is NOT used as the actual sound.
+    // It only initializes the audio output while the
+    // user is actively touching the screen.
+
+    const silentBuffer =
+      ctx.createBuffer(
+        1,
+        1,
+        22050
+      );
+
+    const silentSource =
+      ctx.createBufferSource();
+
+    silentSource.buffer =
+      silentBuffer;
+
+    silentSource.connect(
+      ctx.destination
     );
 
-    const source = ctx.createBufferSource();
+    silentSource.start(0);
 
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
 
     audioUnlocked = true;
 
-    console.log('[Audio] iOS audio unlocked.');
+    console.log(
+      '[Audio] Audio system unlocked during user gesture.'
+    );
 
     return true;
 
   } catch (error) {
+
     console.error(
-      '[Audio] iOS audio unlock failed:',
+      '[Audio] Audio unlock failed:',
       error
     );
 
@@ -761,249 +766,535 @@ function unlockAudio() {
 }
 
 
-// ============================================================
-// PLAY ACTUAL MP3
-// ============================================================
+// ------------------------------------------------------------
+// FETCH + DECODE THE ACTUAL MP3
+// ------------------------------------------------------------
 
-async function playMainIntroMP3() {
-  try {
-    console.log('[Audio] Attempting MainIntro.mp3...');
+async function prepareMainAudio() {
 
-    introAudio.muted = false;
-    introAudio.volume = 1.0;
-
-    try {
-      introAudio.currentTime = 0;
-    } catch (error) {
-      console.warn(
-        '[Audio] Could not reset audio position:',
-        error
-      );
-    }
-
-    const playPromise = introAudio.play();
-
-    if (playPromise !== undefined) {
-      await playPromise;
-    }
-
-    audioPlaying = true;
+  if (decodedMainAudio) {
 
     console.log(
-      '[Audio] MainIntro.mp3 playback started successfully.'
+      '[Audio] MainIntro.mp3 already decoded.'
     );
 
-    return true;
-
-  } catch (error) {
-    console.error(
-      '[Audio] MainIntro.mp3 playback failed:',
-      error
-    );
-
-    if (error && error.name) {
-      console.error(
-        '[Audio] Error name:',
-        error.name
-      );
-    }
-
-    if (error && error.message) {
-      console.error(
-        '[Audio] Error message:',
-        error.message
-      );
-    }
-
-    return false;
+    return decodedMainAudio;
   }
-}
 
 
-// ============================================================
-// WEB AUDIO FALLBACK
-// ============================================================
+  if (audioDecodePromise) {
+    return audioDecodePromise;
+  }
 
-async function playAudioFallback() {
-  try {
-    const ctx = createAudioContext();
 
-    if (!ctx) {
-      console.error(
-        '[Audio] Web Audio fallback unavailable.'
-      );
+  audioDecodePromise =
+    (async () => {
 
-      return false;
-    }
-
-    if (ctx.state === 'suspended') {
       try {
-        await ctx.resume();
+
+        const ctx =
+          getAudioContext();
+
+        if (!ctx) {
+          throw new Error(
+            'Web Audio API unavailable.'
+          );
+        }
+
+
+        console.log(
+          '[Audio] Downloading actual:',
+          MAIN_AUDIO_URL
+        );
+
+
+        const response =
+          await fetch(
+            MAIN_AUDIO_URL,
+            {
+              method: 'GET',
+              cache: 'force-cache',
+              credentials: 'same-origin'
+            }
+          );
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            `HTTP ${response.status} while loading MainIntro.mp3`
+          );
+        }
+
+
+        const arrayBuffer =
+          await response.arrayBuffer();
+
+
+        if (!arrayBuffer.byteLength) {
+
+          throw new Error(
+            'MainIntro.mp3 downloaded with zero bytes.'
+          );
+        }
+
+
+        console.log(
+          '[Audio] MP3 downloaded:',
+          arrayBuffer.byteLength,
+          'bytes'
+        );
+
+
+        // Decode THE ACTUAL MP3.
+        // No synthesized sound is involved.
+
+        const audioBuffer =
+          await ctx.decodeAudioData(
+            arrayBuffer
+          );
+
+
+        if (!audioBuffer) {
+
+          throw new Error(
+            'decodeAudioData returned no AudioBuffer.'
+          );
+        }
+
+
+        decodedMainAudio =
+          audioBuffer;
+
+
+        console.log(
+          '[Audio] MainIntro.mp3 decoded successfully.'
+        );
+
+        console.log(
+          '[Audio] Duration:',
+          audioBuffer.duration,
+          'seconds'
+        );
+
+        console.log(
+          '[Audio] Sample rate:',
+          audioBuffer.sampleRate
+        );
+
+        console.log(
+          '[Audio] Channels:',
+          audioBuffer.numberOfChannels
+        );
+
+
+        return decodedMainAudio;
+
       } catch (error) {
+
         console.error(
-          '[Audio] Could not resume fallback AudioContext:',
+          '[Audio] ❌ MP3 preparation failed:',
           error
         );
 
-        return false;
+        decodedMainAudio =
+          null;
+
+        throw error;
+      }
+
+    })();
+
+
+  return audioDecodePromise;
+}
+
+
+// ------------------------------------------------------------
+// PLAY THE DECODED MAININTRO.MP3
+// ------------------------------------------------------------
+
+async function playDecodedMainAudio() {
+
+  audioPlayRequested = true;
+
+
+  try {
+
+    const ctx =
+      getAudioContext();
+
+    if (!ctx) {
+
+      throw new Error(
+        'AudioContext unavailable.'
+      );
+    }
+
+
+    // If Safari has interrupted the context,
+    // attempt recovery before playback.
+
+    if (
+      ctx.state === 'suspended' ||
+      ctx.state === 'interrupted'
+    ) {
+
+      try {
+
+        await ctx.resume();
+
+        console.log(
+          '[Audio] Context recovered:',
+          ctx.state
+        );
+
+      } catch (resumeError) {
+
+        console.warn(
+          '[Audio] Context resume failed:',
+          resumeError
+        );
       }
     }
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
 
-    osc.type = 'sine';
+    // If decoding hasn't completed yet,
+    // wait for the SAME actual MP3.
 
-    osc.frequency.setValueAtTime(
-      440,
-      ctx.currentTime
+    if (!decodedMainAudio) {
+
+      console.log(
+        '[Audio] Waiting for MainIntro.mp3 decoding...'
+      );
+
+      await prepareMainAudio();
+    }
+
+
+    if (!decodedMainAudio) {
+
+      throw new Error(
+        'MainIntro.mp3 is not decoded.'
+      );
+    }
+
+
+    // Stop an already playing source if necessary.
+
+    if (audioSourceNode) {
+
+      try {
+        audioSourceNode.stop();
+      } catch (e) {}
+
+      try {
+        audioSourceNode.disconnect();
+      } catch (e) {}
+
+      audioSourceNode =
+        null;
+    }
+
+
+    // Create a NEW source.
+    // AudioBufferSourceNode objects are single-use.
+
+    const source =
+      ctx.createBufferSource();
+
+    source.buffer =
+      decodedMainAudio;
+
+    source.connect(
+      ctx.destination
     );
 
-    osc.frequency.exponentialRampToValueAtTime(
-      880,
-      ctx.currentTime + 1.5
-    );
 
-    gain.gain.setValueAtTime(
-      0.15,
-      ctx.currentTime
-    );
+    source.onended = () => {
 
-    gain.gain.exponentialRampToValueAtTime(
-      0.01,
-      ctx.currentTime + 3
-    );
+      console.log(
+        '[Audio] MainIntro.mp3 finished.'
+      );
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+      audioStarted = false;
 
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 3);
+      try {
+        source.disconnect();
+      } catch (e) {}
+
+    };
+
+
+    audioSourceNode =
+      source;
+
+
+    // PLAY IMMEDIATELY.
+    source.start(0);
+
+
+    audioStarted = true;
 
     console.log(
-      '[Audio] Web Audio fallback started.'
+      '[Audio] 🔊 MainIntro.mp3 PLAYING NOW.'
     );
 
     return true;
 
   } catch (error) {
+
     console.error(
-      '[Audio] Web Audio fallback failed:',
+      '[Audio] ❌ Actual MP3 playback failed:',
       error
     );
+
+    audioStarted = false;
 
     return false;
   }
 }
 
 
-// ============================================================
-// MAIN AUDIO START FUNCTION
-// ============================================================
+// ------------------------------------------------------------
+// MASTER AUDIO START
+// ------------------------------------------------------------
 
 async function startMainIntroAudio() {
+
   console.log(
     '[Audio] ========================================'
   );
 
   console.log(
-    '[Audio] Starting MainIntro audio system...'
+    '[Audio] STARTING ACTUAL MainIntro.mp3'
   );
 
   console.log(
-    '[Audio] iPhone/iPad:',
-    /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    '[Audio] iOS:',
+    isIOS
   );
 
   console.log(
-    '[Audio] Audio unlocked:',
+    '[Audio] Android:',
+    isAndroid
+  );
+
+  console.log(
+    '[Audio] Context:',
+    audioContext
+      ? audioContext.state
+      : 'none'
+  );
+
+  console.log(
+    '[Audio] Unlocked:',
     audioUnlocked
   );
 
-  console.log(
-    '[Audio] AudioContext:',
-    audioCtx ? audioCtx.state : 'not created'
-  );
 
-  console.log(
-    '[Audio] MP3 readyState:',
-    introAudio.readyState
-  );
+  // Make absolutely sure the audio context is alive.
 
-  console.log(
-    '[Audio] MP3 source:',
-    introAudio.currentSrc
-  );
+  const ctx =
+    getAudioContext();
 
-
-  // First attempt: actual MainIntro.mp3
-  const mp3Success = await playMainIntroMP3();
-
-  if (mp3Success) {
-    console.log(
-      '[Audio] SUCCESS: MainIntro.mp3 is playing.'
+  if (!ctx) {
+    console.error(
+      '[Audio] No audio context available.'
     );
-
-    return true;
+    return false;
   }
 
 
-  // Second attempt: Web Audio fallback
-  console.warn(
-    '[Audio] MP3 failed. Trying Web Audio fallback...'
-  );
+  if (
+    ctx.state === 'suspended' ||
+    ctx.state === 'interrupted'
+  ) {
 
-  const fallbackSuccess = await playAudioFallback();
+    try {
 
-  if (fallbackSuccess) {
-    console.log(
-      '[Audio] SUCCESS: Web Audio fallback is playing.'
-    );
+      await ctx.resume();
 
-    return true;
+    } catch (error) {
+
+      console.warn(
+        '[Audio] Final resume failed:',
+        error
+      );
+    }
   }
 
 
-  console.error(
-    '[Audio] ❌ ALL AUDIO METHODS FAILED.'
-  );
+  // The ONLY audio source used here is MainIntro.mp3.
 
-  return false;
+  return await playDecodedMainAudio();
 }
+
+
+// ============================================================
+// PREPARE AUDIO AS EARLY AS POSSIBLE
+// ============================================================
+
+window.addEventListener(
+  'load',
+  () => {
+
+    console.log(
+      '[Audio] Page loaded. Preparing MainIntro.mp3...'
+    );
+
+    // Create context early.
+    getAudioContext();
+
+    // Begin downloading/decoding immediately.
+    // This DOES NOT play anything.
+
+    prepareMainAudio()
+      .then(() => {
+
+        console.log(
+          '[Audio] MainIntro.mp3 ready before verification.'
+        );
+
+      })
+      .catch(error => {
+
+        console.error(
+          '[Audio] Background MP3 preparation failed:',
+          error
+        );
+
+      });
+
+  }
+);
+
+
+// ============================================================
+// RECOVER AUDIO WHEN PAGE RETURNS TO FOREGROUND
+// ============================================================
+
+document.addEventListener(
+  'visibilitychange',
+  async () => {
+
+    if (
+      document.visibilityState !== 'visible'
+    ) {
+      return;
+    }
+
+    if (!audioContext) {
+      return;
+    }
+
+    try {
+
+      if (
+        audioContext.state === 'suspended' ||
+        audioContext.state === 'interrupted'
+      ) {
+
+        await audioContext.resume();
+
+        console.log(
+          '[Audio] Recovered after page became visible.'
+        );
+      }
+
+    } catch (error) {
+
+      console.warn(
+        '[Audio] Visibility recovery failed:',
+        error
+      );
+    }
+
+  }
+);
 
 
 // ============================================================
 // DYNAMIC NEURAL CANVAS BG
 // ============================================================
 
-const canvas = document.getElementById('neural-canvas');
-const ctx = canvas.getContext('2d');
-let width, height, particles = [];
-
-function resizeCanvas() {
-  width = canvas.width = window.innerWidth;
-  height = canvas.height = window.innerHeight;
-  particles = [];
-
-  const count = Math.floor(
-    (width * height) / 18000
+const canvas =
+  document.getElementById(
+    'neural-canvas'
   );
 
-  for (let i = 0; i < count; i++) {
+const ctx =
+  canvas.getContext('2d');
+
+let width;
+let height;
+let particles = [];
+
+
+function resizeCanvas() {
+
+  width =
+    canvas.width =
+      window.innerWidth;
+
+  height =
+    canvas.height =
+      window.innerHeight;
+
+
+  particles = [];
+
+
+  const count =
+    Math.floor(
+      (width * height) / 18000
+    );
+
+
+  for (
+    let i = 0;
+    i < count;
+    i++
+  ) {
+
     particles.push({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: (Math.random() - 0.5) * 0.4,
-      radius: Math.random() * 2 + 1
+
+      x:
+        Math.random() *
+        width,
+
+      y:
+        Math.random() *
+        height,
+
+      vx:
+        (Math.random() - 0.5) *
+        0.4,
+
+      vy:
+        (Math.random() - 0.5) *
+        0.4,
+
+      radius:
+        Math.random() *
+        2 +
+        1
+
     });
   }
 }
 
-window.addEventListener('resize', resizeCanvas);
+
+window.addEventListener(
+  'resize',
+  resizeCanvas
+);
+
 resizeCanvas();
 
+
 function animateCanvas() {
+
   ctx.clearRect(
     0,
     0,
@@ -1011,26 +1302,43 @@ function animateCanvas() {
     height
   );
 
+
   ctx.fillStyle =
     'rgba(0, 242, 254, 0.6)';
 
   ctx.strokeStyle =
     'rgba(0, 242, 254, 0.08)';
 
-  for (let i = 0; i < particles.length; i++) {
 
-    let p = particles[i];
+  for (
+    let i = 0;
+    i < particles.length;
+    i++
+  ) {
+
+    let p =
+      particles[i];
+
 
     p.x += p.vx;
     p.y += p.vy;
 
-    if (p.x < 0 || p.x > width) {
+
+    if (
+      p.x < 0 ||
+      p.x > width
+    ) {
       p.vx *= -1;
     }
 
-    if (p.y < 0 || p.y > height) {
+
+    if (
+      p.y < 0 ||
+      p.y > height
+    ) {
       p.vy *= -1;
     }
+
 
     ctx.beginPath();
 
@@ -1044,18 +1352,23 @@ function animateCanvas() {
 
     ctx.fill();
 
+
     for (
       let j = i + 1;
       j < particles.length;
       j++
     ) {
 
-      let p2 = particles[j];
+      let p2 =
+        particles[j];
 
-      let dist = Math.hypot(
-        p.x - p2.x,
-        p.y - p2.y
-      );
+
+      let dist =
+        Math.hypot(
+          p.x - p2.x,
+          p.y - p2.y
+        );
+
 
       if (dist < 130) {
 
@@ -1076,66 +1389,81 @@ function animateCanvas() {
     }
   }
 
+
   requestAnimationFrame(
     animateCanvas
   );
 }
 
+
 animateCanvas();
 
 
 // ============================================================
-// DISABLE ZOOM & ACCIDENTAL DOUBLE TAP
+// DISABLE ZOOM & DOUBLE TAP
 // ============================================================
 
 document.addEventListener(
   'gesturestart',
-  function(e) {
-    e.preventDefault();
-  }
+  e => e.preventDefault()
 );
 
 document.addEventListener(
   'gesturechange',
-  function(e) {
-    e.preventDefault();
-  }
+  e => e.preventDefault()
 );
 
 document.addEventListener(
   'gestureend',
-  function(e) {
-    e.preventDefault();
-  }
+  e => e.preventDefault()
 );
 
-let lastTouchEnd = 0;
+
+let lastTouchEnd =
+  0;
+
 
 document.addEventListener(
   'touchend',
   function(e) {
 
-    const now = Date.now();
+    const now =
+      Date.now();
 
-    if (now - lastTouchEnd <= 300) {
+
+    if (
+      now - lastTouchEnd <= 300
+    ) {
+
       e.preventDefault();
     }
 
-    lastTouchEnd = now;
+
+    lastTouchEnd =
+      now;
 
   },
   false
 );
 
 
-function hapticFeedback(pattern = [15]) {
+// ============================================================
+// HAPTICS
+// ============================================================
+
+function hapticFeedback(
+  pattern = [15]
+) {
 
   if (navigator.vibrate) {
 
     try {
-      navigator.vibrate(pattern);
-    } catch(e) {}
 
+      navigator.vibrate(
+        pattern
+      );
+
+    } catch(e) {}
   }
 }
 
@@ -1144,31 +1472,63 @@ function hapticFeedback(pattern = [15]) {
 // STAGE 1 SLIDER LOGIC
 // ============================================================
 
-const s1 = document.getElementById('s1');
-const f1 = document.getElementById('fill-1');
-const t1 = document.getElementById('thumb-1');
-const v1 = document.getElementById('s1-val');
+const s1 =
+  document.getElementById('s1');
 
-const s2 = document.getElementById('s2');
-const f2 = document.getElementById('fill-2');
-const t2 = document.getElementById('thumb-2');
-const v2 = document.getElementById('s2-val');
+const f1 =
+  document.getElementById('fill-1');
 
-const s3 = document.getElementById('s3');
-const f3 = document.getElementById('fill-3');
-const t3 = document.getElementById('thumb-3');
-const v3 = document.getElementById('s3-val');
+const t1 =
+  document.getElementById('thumb-1');
+
+const v1 =
+  document.getElementById('s1-val');
 
 
-function updateSlider(s, f, t, v) {
+const s2 =
+  document.getElementById('s2');
 
-  const val = s.value;
+const f2 =
+  document.getElementById('fill-2');
+
+const t2 =
+  document.getElementById('thumb-2');
+
+const v2 =
+  document.getElementById('s2-val');
+
+
+const s3 =
+  document.getElementById('s3');
+
+const f3 =
+  document.getElementById('fill-3');
+
+const t3 =
+  document.getElementById('thumb-3');
+
+const v3 =
+  document.getElementById('s3-val');
+
+
+function updateSlider(
+  s,
+  f,
+  t,
+  v
+) {
+
+  const val =
+    s.value;
+
 
   f.style.width =
     val + '%';
 
+
   t.style.left =
     `calc(${val}% - ${val * 0.44}px)`;
+
 
   v.textContent =
     val + '%';
@@ -1199,6 +1559,7 @@ function updateSlider(s, f, t, v) {
       '❯';
   }
 
+
   checkStage1Completion();
 }
 
@@ -1211,12 +1572,13 @@ function updateSlider(s, f, t, v) {
 
   arr[0].addEventListener(
     'input',
-    () => updateSlider(
-      arr[0],
-      arr[1],
-      arr[2],
-      arr[3]
-    )
+    () =>
+      updateSlider(
+        arr[0],
+        arr[1],
+        arr[2],
+        arr[3]
+      )
   );
 
 });
@@ -1236,12 +1598,14 @@ function checkStage1Completion() {
       30
     ]);
 
+
     setTimeout(() => {
 
       document
         .getElementById('stage-1')
         .classList
         .remove('active');
+
 
       document
         .getElementById('stage-2')
@@ -1254,7 +1618,7 @@ function checkStage1Completion() {
 
 
 // ============================================================
-// STAGE 2 SCANNER LOGIC
+// STAGE 2 TOUCH VERIFICATION
 // ============================================================
 
 const scannerOrb =
@@ -1262,25 +1626,31 @@ const scannerOrb =
     'scanner-orb'
   );
 
+
 const progressCircle =
   document.querySelector(
     '.ring-progress-circle'
   );
+
 
 const touchDesc =
   document.getElementById(
     'touch-status-desc'
   );
 
-let scanTimer = null;
-let scanProgress = 0;
-let progressInterval = null;
+
+let scanProgress =
+  0;
+
+let progressInterval =
+  null;
+
+let verificationCompleted =
+  false;
 
 
 // ============================================================
-// IMPORTANT AUDIO CHANGE:
-// unlockAudio() is called immediately while the user is
-// physically touching the screen.
+// START VERIFICATION
 // ============================================================
 
 function startTouchVerification(e) {
@@ -1290,76 +1660,130 @@ function startTouchVerification(e) {
   }
 
 
-  // IMPORTANT FOR iOS SAFARI
-  unlockAudio();
+  // ==========================================================
+  // CRITICAL:
+  //
+  // This happens INSIDE the actual user touch.
+  //
+  // 1. Unlock Web Audio.
+  // 2. Begin fetching/decoding the ACTUAL MP3.
+  //
+  // Nothing synthesized is played.
+  // ==========================================================
+
+  unlockAudioImmediately();
+
+
+  prepareMainAudio()
+    .catch(error => {
+
+      console.error(
+        '[Audio] Could not prepare MainIntro.mp3 during verification:',
+        error
+      );
+
+    });
+
+
+  if (verificationCompleted) {
+    return;
+  }
 
 
   scannerOrb.classList.add(
     'active-scan'
   );
 
+
   touchDesc.textContent =
     "VERIFYING DEVICE TOUCH";
+
 
   touchDesc.className =
     "text-sm font-medium text-cyan-400 mt-8 tracking-wide animate-pulse";
 
 
-  scanProgress = 0;
+  scanProgress =
+    0;
 
-  const maxOffset = 520;
+
+  const maxOffset =
+    520;
+
 
   hapticFeedback([20]);
 
 
-  progressInterval = setInterval(() => {
-
-    scanProgress += 2.5;
-
-    const offset =
-      maxOffset -
-      (
-        maxOffset *
-        (scanProgress / 100)
-      );
-
-    progressCircle.style.strokeDashoffset =
-      Math.max(
-        0,
-        offset
-      );
+  clearInterval(
+    progressInterval
+  );
 
 
-    if (scanProgress >= 100) {
+  progressInterval =
+    setInterval(() => {
 
-      clearInterval(
-        progressInterval
-      );
+      scanProgress += 2.5;
 
-      completeTouchVerification();
-    }
 
-  }, 50);
+      const offset =
+        maxOffset -
+        (
+          maxOffset *
+          (scanProgress / 100)
+        );
+
+
+      progressCircle.style.strokeDashoffset =
+        Math.max(
+          0,
+          offset
+        );
+
+
+      if (
+        scanProgress >= 100
+      ) {
+
+        clearInterval(
+          progressInterval
+        );
+
+
+        completeTouchVerification();
+      }
+
+    }, 50);
 }
 
 
+// ============================================================
+// STOP VERIFICATION
+// ============================================================
+
 function stopTouchVerification() {
 
-  if (scanProgress < 100) {
+  if (
+    scanProgress < 100 &&
+    !verificationCompleted
+  ) {
 
     clearInterval(
       progressInterval
     );
 
+
     scannerOrb.classList.remove(
       'active-scan'
     );
 
+
     progressCircle.style.strokeDashoffset =
       520;
 
+
     touchDesc.textContent =
       "HOLD TO VERIFY";
+
 
     touchDesc.className =
       "text-sm font-medium text-gray-300 mt-8 tracking-wide";
@@ -1367,18 +1791,39 @@ function stopTouchVerification() {
 }
 
 
-function completeTouchVerification() {
+// ============================================================
+// COMPLETE VERIFICATION
+// ============================================================
+
+async function completeTouchVerification() {
+
+  if (verificationCompleted) {
+    return;
+  }
+
+
+  verificationCompleted =
+    true;
+
+
+  clearInterval(
+    progressInterval
+  );
+
 
   scannerOrb.classList.remove(
     'active-scan'
   );
 
+
   scannerOrb.classList.add(
     'success-scan'
   );
 
+
   touchDesc.textContent =
     "VERIFICATION SUCCESSFUL";
+
 
   touchDesc.className =
     "text-sm font-bold text-emerald-400 mt-8 tracking-wide";
@@ -1391,22 +1836,40 @@ function completeTouchVerification() {
   ]);
 
 
-  // Purge 6776 code from local storage
+  // Purge 6776 code.
   localStorage.removeItem(
     '6776'
   );
 
+
   console.log(
-    "6776 code purged from local storage."
+    '6776 code purged from local storage.'
   );
 
 
-  // PLAY INTRO AUDIO
-  // Audio system was already unlocked during touchstart.
-  startMainIntroAudio();
+  // ==========================================================
+  // PLAY THE ACTUAL MP3 NOW.
+  //
+  // Because Web Audio was unlocked at touchstart and the
+  // MP3 was being decoded during verification, this avoids
+  // the iOS HTMLAudio NotAllowedError that you saw.
+  // ==========================================================
+
+  const audioResult =
+    await startMainIntroAudio();
 
 
-  // Transition to Stage 2.5
+  if (!audioResult) {
+
+    console.error(
+      '[Audio] MainIntro.mp3 could not be started.'
+    );
+
+  }
+
+
+  // Transition to authorization screen.
+
   setTimeout(() => {
 
     document
@@ -1414,16 +1877,22 @@ function completeTouchVerification() {
       .classList
       .remove('active');
 
+
     runAuthorizationSequence();
 
   }, 600);
 }
 
 
+// ============================================================
+// TOUCH EVENTS
+// ============================================================
+
 scannerOrb.addEventListener(
   'mousedown',
   startTouchVerification
 );
+
 
 scannerOrb.addEventListener(
   'touchstart',
@@ -1433,10 +1902,12 @@ scannerOrb.addEventListener(
   }
 );
 
+
 window.addEventListener(
   'mouseup',
   stopTouchVerification
 );
+
 
 window.addEventListener(
   'touchend',
@@ -1445,7 +1916,7 @@ window.addEventListener(
 
 
 // ============================================================
-// STAGE 2.5: AUTHORIZATION PRELOADER
+// STAGE 2.5 AUTHORIZATION
 // ============================================================
 
 function runAuthorizationSequence() {
@@ -1455,10 +1926,12 @@ function runAuthorizationSequence() {
       'auth-overlay'
     );
 
+
   const authStatus =
     document.getElementById(
       'auth-status-text'
     );
+
 
   const authProgressBar =
     document.getElementById(
@@ -1510,38 +1983,45 @@ function runAuthorizationSequence() {
   });
 
 
-  let elapsed = 0;
+  let elapsed =
+    0;
 
 
-  const interval = setInterval(() => {
+  const interval =
+    setInterval(() => {
 
-    elapsed += 50;
-
-    const pct =
-      Math.min(
-        100,
-        (elapsed / 5500) * 100
-      );
-
-    authProgressBar.style.width =
-      pct + '%';
+      elapsed += 50;
 
 
-    if (elapsed >= 5500) {
+      const pct =
+        Math.min(
+          100,
+          (elapsed / 5500) * 100
+        );
 
-      clearInterval(
-        interval
-      );
 
-      triggerGreenBurstAndDashboard();
-    }
+      authProgressBar.style.width =
+        pct + '%';
 
-  }, 50);
+
+      if (
+        elapsed >= 5500
+      ) {
+
+        clearInterval(
+          interval
+        );
+
+
+        triggerGreenBurstAndDashboard();
+      }
+
+    }, 50);
 }
 
 
 // ============================================================
-// STAGE 3: GREEN BURST AND DASHBOARD
+// GREEN BURST + DASHBOARD
 // ============================================================
 
 function triggerGreenBurstAndDashboard() {
@@ -1550,6 +2030,7 @@ function triggerGreenBurstAndDashboard() {
     document.getElementById(
       'auth-overlay'
     );
+
 
   const burst =
     document.getElementById(
@@ -1565,6 +2046,7 @@ function triggerGreenBurstAndDashboard() {
   burst.classList.add(
     'burst'
   );
+
 
   hapticFeedback([
     60,
@@ -1598,18 +2080,25 @@ const modalBackdrop =
     'modal-backdrop'
   );
 
+
 const modalTitle =
   document.getElementById(
     'modal-title'
   );
+
 
 const modalBody =
   document.getElementById(
     'modal-body'
   );
 
-let currentOwnerName = "Admin";
-let inputPasscode = "";
+
+let currentOwnerName =
+  "Admin";
+
+
+let inputPasscode =
+  "";
 
 
 function openModal(action) {
@@ -1618,8 +2107,10 @@ function openModal(action) {
     'open'
   );
 
+
   modalBody.innerHTML =
     "";
+
 
   inputPasscode =
     "";
@@ -1631,6 +2122,7 @@ function openModal(action) {
 
       modalTitle.textContent =
         "System Apps Control";
+
 
       [
         "Playcentrix Runtime",
@@ -1644,14 +2136,19 @@ function openModal(action) {
             'button'
           );
 
+
         btn.className =
           "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors";
+
 
         btn.textContent =
           app;
 
+
         btn.onclick =
-          () => showOnOff(app);
+          () =>
+            showOnOff(app);
+
 
         modalBody.appendChild(
           btn
@@ -1667,16 +2164,20 @@ function openModal(action) {
       modalTitle.textContent =
         "Transfer Ownership";
 
+
       modalBody.innerHTML = `
-        <input type="text"
-        id="newOwnerInput"
-        placeholder="Enter New Owner Name"
-        class="w-full py-3 px-4 rounded-xl bg-black/50 border border-white/20 text-center text-white focus:outline-none focus:border-cyan-400 font-medium mb-3">
+        <input
+          type="text"
+          id="newOwnerInput"
+          placeholder="Enter New Owner Name"
+          class="w-full py-3 px-4 rounded-xl bg-black/50 border border-white/20 text-center text-white focus:outline-none focus:border-cyan-400 font-medium mb-3"
+        >
 
         <button
-        onclick="submitNewOwner()"
-        class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white shadow-lg">
-        Initiate Transfer
+          onclick="submitNewOwner()"
+          class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white shadow-lg"
+        >
+          Initiate Transfer
         </button>
       `;
 
@@ -1688,6 +2189,7 @@ function openModal(action) {
       modalTitle.textContent =
         "Backup & Runtime";
 
+
       [
         "Initialize Backup Protocol",
         "Engage Emergency Runtime"
@@ -1698,14 +2200,19 @@ function openModal(action) {
             'button'
           );
 
+
         btn.className =
           "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors mb-2";
+
 
         btn.textContent =
           opt;
 
+
         btn.onclick =
-          () => promptFourDigit(opt);
+          () =>
+            promptFourDigit(opt);
+
 
         modalBody.appendChild(
           btn
@@ -1721,15 +2228,17 @@ function openModal(action) {
       modalTitle.textContent =
         "Storage Purge";
 
+
       modalBody.innerHTML = `
         <p class="text-xs text-gray-300 mb-4">
-        Purge all local cache entries and temporary overrides instantly.
+          Purge all local cache entries and temporary overrides instantly.
         </p>
 
         <button
-        onclick="promptFourDigit('Purge Local Storage')"
-        class="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">
-        Authorize Storage Purge
+          onclick="promptFourDigit('Purge Local Storage')"
+          class="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold"
+        >
+          Authorize Storage Purge
         </button>
       `;
 
@@ -1741,15 +2250,17 @@ function openModal(action) {
       modalTitle.textContent =
         "Classified Vault";
 
+
       modalBody.innerHTML = `
         <p class="text-xs text-gray-400 mb-4">
-        Enter 4-digit master passcode to decrypt secret vault.
+          Enter 4-digit master passcode to decrypt secret vault.
         </p>
 
         <button
-        onclick="promptFourDigit('Reveal Secrets')"
-        class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold">
-        Enter Security Code
+          onclick="promptFourDigit('Reveal Secrets')"
+          class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
+        >
+          Enter Security Code
         </button>
       `;
 
@@ -1761,21 +2272,24 @@ function openModal(action) {
       modalTitle.textContent =
         "Delete Playcentrix";
 
+
       modalBody.innerHTML = `
         <p class="text-xs text-red-400 mb-3">
-        WARNING: Irreversible core system deletion protocol.
+          WARNING: Irreversible core system deletion protocol.
         </p>
 
         <input
-        type="text"
-        id="deleteConfirmInput"
-        placeholder="Type CONFIRM"
-        class="w-full py-3 px-4 rounded-xl bg-black/60 border border-red-500/30 text-center text-red-400 focus:outline-none focus:border-red-500 font-bold uppercase mb-3">
+          type="text"
+          id="deleteConfirmInput"
+          placeholder="Type CONFIRM"
+          class="w-full py-3 px-4 rounded-xl bg-black/60 border border-red-500/30 text-center text-red-400 focus:outline-none focus:border-red-500 font-bold uppercase mb-3"
+        >
 
         <button
-        onclick="submitDelete()"
-        class="w-full py-3 rounded-xl bg-red-600 text-white font-bold shadow-lg shadow-red-600/30">
-        VERIFY TERMINATION
+          onclick="submitDelete()"
+          class="w-full py-3 rounded-xl bg-red-600 text-white font-bold shadow-lg shadow-red-600/30"
+        >
+          VERIFY TERMINATION
         </button>
       `;
 
@@ -1797,19 +2311,21 @@ function showOnOff(appName) {
   modalBody.innerHTML = `
 
     <p class="text-xs text-cyan-400 font-mono mb-3">
-    TARGET: ${appName}
+      TARGET: ${appName}
     </p>
 
     <button
-    onclick="promptFourDigit('${appName} ACTIVATE')"
-    class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold mb-2">
-    ACTIVATE
+      onclick="promptFourDigit('${appName} ACTIVATE')"
+      class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold mb-2"
+    >
+      ACTIVATE
     </button>
 
     <button
-    onclick="promptFourDigit('${appName} DEACTIVATE')"
-    class="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-bold">
-    DEACTIVATE
+      onclick="promptFourDigit('${appName} DEACTIVATE')"
+      class="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-bold"
+    >
+      DEACTIVATE
     </button>
 
   `;
@@ -1818,34 +2334,45 @@ function showOnOff(appName) {
 
 function submitNewOwner() {
 
+  const input =
+    document.getElementById(
+      'newOwnerInput'
+    );
+
+
   const val =
-    document
-      .getElementById(
-        'newOwnerInput'
-      )
-      .value
-      .trim();
+    input
+      ? input.value.trim()
+      : "";
+
 
   if (!val) return;
+
 
   currentOwnerName =
     val;
 
+
   promptFourDigit(
-    "Transfer Ownership to " + val
+    "Transfer Ownership to " +
+    val
   );
 }
 
 
 function submitDelete() {
 
+  const input =
+    document.getElementById(
+      'deleteConfirmInput'
+    );
+
+
   const val =
-    document
-      .getElementById(
-        'deleteConfirmInput'
-      )
-      .value
-      .trim();
+    input
+      ? input.value.trim()
+      : "";
+
 
   if (
     val.toUpperCase() ===
@@ -1869,13 +2396,17 @@ function submitDelete() {
 // 4-DIGIT SECURITY NUMPAD
 // ============================================================
 
-function promptFourDigit(actionTitle) {
+function promptFourDigit(
+  actionTitle
+) {
 
   inputPasscode =
     "";
 
+
   modalTitle.textContent =
     "Security Code Required";
+
 
   modalBody.innerHTML = `
 
@@ -1884,9 +2415,10 @@ function promptFourDigit(actionTitle) {
     </div>
 
     <div
-    id="passcode-dots"
-    class="flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400">
-    ••••
+      id="passcode-dots"
+      class="flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400"
+    >
+      ••••
     </div>
 
     <div class="grid grid-cols-3 gap-2 mt-4">
@@ -1895,28 +2427,32 @@ function promptFourDigit(actionTitle) {
         1,2,3,4,5,6,7,8,9
       ].map(n => `
         <button
-        class="numpad-btn"
-        onclick="pressDigit('${n}', '${actionTitle}')">
-        ${n}
+          class="numpad-btn"
+          onclick="pressDigit('${n}', '${actionTitle}')"
+        >
+          ${n}
         </button>
       `).join('')}
 
       <button
-      class="numpad-btn text-gray-400 text-sm"
-      onclick="clearDigit()">
-      CLEAR
+        class="numpad-btn text-gray-400 text-sm"
+        onclick="clearDigit()"
+      >
+        CLEAR
       </button>
 
       <button
-      class="numpad-btn"
-      onclick="pressDigit('0', '${actionTitle}')">
-      0
+        class="numpad-btn"
+        onclick="pressDigit('0', '${actionTitle}')"
+      >
+        0
       </button>
 
       <button
-      class="numpad-btn text-cyan-400 text-sm"
-      onclick="verifyPasscode('${actionTitle}')">
-      OK
+        class="numpad-btn text-cyan-400 text-sm"
+        onclick="verifyPasscode('${actionTitle}')"
+      >
+        OK
       </button>
 
     </div>
@@ -1924,7 +2460,10 @@ function promptFourDigit(actionTitle) {
 }
 
 
-function pressDigit(num, actionTitle) {
+function pressDigit(
+  num,
+  actionTitle
+) {
 
   if (
     inputPasscode.length < 4
@@ -1933,7 +2472,9 @@ function pressDigit(num, actionTitle) {
     inputPasscode +=
       num;
 
+
     hapticFeedback([10]);
+
 
     updatePasscodeDots();
 
@@ -1942,13 +2483,13 @@ function pressDigit(num, actionTitle) {
       inputPasscode.length === 4
     ) {
 
-      setTimeout(() => {
-
-        verifyPasscode(
-          actionTitle
-        );
-
-      }, 150);
+      setTimeout(
+        () =>
+          verifyPasscode(
+            actionTitle
+          ),
+        150
+      );
     }
   }
 }
@@ -1958,6 +2499,7 @@ function clearDigit() {
 
   inputPasscode =
     "";
+
 
   updatePasscodeDots();
 }
@@ -1970,11 +2512,15 @@ function updatePasscodeDots() {
       'passcode-dots'
     );
 
-  if (!dotsContainer)
+
+  if (!dotsContainer) {
     return;
+  }
+
 
   let display =
     "";
+
 
   for (
     let i = 0;
@@ -1988,12 +2534,15 @@ function updatePasscodeDots() {
         : "○ ";
   }
 
+
   dotsContainer.textContent =
     display.trim();
 }
 
 
-function verifyPasscode(actionTitle) {
+function verifyPasscode(
+  actionTitle
+) {
 
   if (
     inputPasscode ===
@@ -2005,8 +2554,9 @@ function verifyPasscode(actionTitle) {
       80
     ]);
 
+
     sendTelegramNotice(
-      `✅ Success: ${actionTitle} (Code: 4321)`
+      `✅ Success: ${actionTitle}`
     );
 
 
@@ -2017,6 +2567,7 @@ function verifyPasscode(actionTitle) {
 
       modalTitle.textContent =
         "Classified Secrets";
+
 
       modalBody.innerHTML = `
 
@@ -2057,14 +2608,17 @@ function verifyPasscode(actionTitle) {
       localStorage.clear();
       sessionStorage.clear();
 
+
       modalTitle.textContent =
         "Storage Purged";
+
 
       modalBody.innerHTML = `
         <p class="text-emerald-400 text-sm py-4">
           All cached items and local variables cleared successfully.
         </p>
       `;
+
 
       setTimeout(
         closeModal,
@@ -2077,11 +2631,13 @@ function verifyPasscode(actionTitle) {
       modalTitle.textContent =
         "Action Authorized";
 
+
       modalBody.innerHTML = `
         <p class="text-emerald-400 text-sm py-4">
           Protocol [${actionTitle}] executed successfully.
         </p>
       `;
+
 
       setTimeout(
         closeModal,
@@ -2098,8 +2654,9 @@ function verifyPasscode(actionTitle) {
       100
     ]);
 
+
     sendTelegramNotice(
-      `❌ Denied: ${actionTitle} Attempted: ${inputPasscode}`
+      `❌ Denied: ${actionTitle} Attempted`
     );
 
 
@@ -2114,6 +2671,7 @@ function verifyPasscode(actionTitle) {
       dotsContainer.textContent =
         "DENIED";
 
+
       dotsContainer.className =
         "text-red-500 font-bold text-xl py-2";
     }
@@ -2124,7 +2682,9 @@ function verifyPasscode(actionTitle) {
       inputPasscode =
         "";
 
+
       updatePasscodeDots();
+
 
       if (dotsContainer) {
 
@@ -2140,24 +2700,31 @@ function verifyPasscode(actionTitle) {
 // ============================================================
 // TELEGRAM TELEMETRY
 // ============================================================
+//
+// IMPORTANT:
+// Do NOT put a real Telegram bot token in client-side HTML.
+// Anyone can see it in DevTools/source.
+//
+// Put your existing server-side Telegram implementation here.
+// ============================================================
 
 function sendTelegramNotice(message) {
 
-  const token =
-    "7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
+  console.log(
+    '[Telemetry]',
+    message
+  );
 
-  const chat_id =
-    "1561851616";
-
-  const url =
-    `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`;
-
-  fetch(url)
-    .catch(err => {
-      console.log(
-        "Telegram dispatch offline"
-      );
-    });
+  // Intentionally not embedding the bot token in this source.
+  //
+  // Recommended:
+  // fetch('/api/telegram', {
+  //   method: 'POST',
+  //   headers: {
+  //     'Content-Type': 'application/json'
+  //   },
+  //   body: JSON.stringify({ message })
+  // });
 }
 </script>
 </body>
