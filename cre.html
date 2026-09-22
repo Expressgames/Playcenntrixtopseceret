@@ -1,157 +1,403 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full select-none">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Playcentrix 3 Step Auth Credentials</title>
-<style>
-    * { margin:0; padding:0; box-sizing:border-box; font-family: Arial,sans-serif; }
-
-    body {
-        background-color: #f5f5f5;
-        display:flex;
-        justify-content:center;
-        align-items:center;
-        min-height:100vh;
-    }
-
-    .container {
-        width:90%;
-        max-width:400px;
-        background:#fff;
-        padding:30px;
-        border-radius:15px;
-        box-shadow:0 10px 25px rgba(0,0,0,0.1);
-        text-align:center;
-    }
-
-    h1 { font-size:1.5rem; margin-bottom:25px; color:#333; }
-
-    .auth-box {
-        display:flex;
-        border:1px solid #ccc;
-        border-radius:10px;
-        overflow:hidden;
-        margin-bottom:20px;
-        transition: border-color 0.3s;
-    }
-
-    input[type="text"] {
-        flex:1;
-        padding:15px;
-        font-size:1rem;
-        border:none;
-        outline:none;
-        text-transform:uppercase;
-    }
-
-    select {
-        width:35%;
-        padding:15px;
-        font-size:1rem;
-        border:none;
-        outline:none;
-        background-color:#e0e0e0;
-        cursor:pointer;
-    }
-
-    #verifyBtn {
-        padding:15px 30px;
-        font-size:1.2rem;
-        border:none;
-        border-radius:10px;
-        background-color:#2196F3;
-        color:white;
-        cursor:pointer;
-        transition:background 0.3s;
-    }
-
-    #verifyBtn:hover { background-color:#1976d2; }
-
-    .spinner {
-        border:4px solid #f3f3f3;
-        border-top:4px solid #2196F3;
-        border-radius:50%;
-        width:25px;
-        height:25px;
-        animation:spin 1s linear infinite;
-        display:inline-block;
-        margin-left:10px;
-        vertical-align:middle;
-        display:none;
-    }
-
-    @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
-
-</style>
-</head>
-<body>
-
-<div class="container">
-    <h1>Playcentrix 3 Step Auth Credentials</h1>
-    <div class="auth-box" id="authBox">
-        <input type="text" id="codeInput" placeholder="Enter Code" maxlength="8">
-        <select id="dropdown">
-            <option value="GHO">GHO</option>
-            <option value="CTY">CTY</option>
-            <option value="PCX">PCX</option>
-        </select>
-    </div>
-    <button id="verifyBtn" onclick="verifyAuth()">Verify <span class="spinner" id="spinner"></span></button>
-</div>
-
-<script>
-const correctCode = "3ACLVRFT";
-const correctDropdown = "PCX";
-
-const input = document.getElementById('codeInput');
-const dropdown = document.getElementById('dropdown');
-const authBox = document.getElementById('authBox');
-const verifyBtn = document.getElementById('verifyBtn');
-const spinner = document.getElementById('spinner');
-
-// Force uppercase
-input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
-
-function verifyAuth() {
-    const userCode = input.value.trim();
-    const dropdownValue = dropdown.value;
-
-    spinner.style.display = 'inline-block';
-    verifyBtn.disabled = true;
-
-    setTimeout(() => {
-        spinner.style.display = 'none';
-        verifyBtn.disabled = false;
-
-        if(userCode === correctCode && dropdownValue === correctDropdown){
-            // Correct: green border and button
-            authBox.style.borderColor = '#4CAF50';
-            verifyBtn.style.backgroundColor = '#4CAF50';
-            verifyBtn.textContent = 'Verified!';
-            
-            setTimeout(() => {
-                // redirect after 2 seconds
-                window.location.href = 'step.html';
-            }, 2000);
-        } else {
-            // Incorrect: red border and button
-            authBox.style.borderColor = '#f44336';
-            verifyBtn.style.backgroundColor = '#f44336';
-            verifyBtn.textContent = 'Incorrect';
-            
-            setTimeout(() => {
-                // revert to normal
-                authBox.style.borderColor = '#ccc';
-                verifyBtn.style.backgroundColor = '#2196F3';
-                verifyBtn.textContent = 'Verify';
-                input.value = '';
-                dropdown.value = 'GHO';
-            }, 2000);
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Playcentrix Secure Verification</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0d0f12',
+                        cardBg: 'rgba(22, 26, 35, 0.75)',
+                        borderMuted: 'rgba(255, 255, 255, 0.1)',
+                        accentBlue: '#3b82f6',
+                        accentGreen: '#10b981',
+                        accentRed: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Inter', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['SF Mono', 'Fira Code', 'Courier New', 'monospace']
+                    }
+                }
+            }
         }
-    }, 3000);
-}
-</script>
+    </script>
+    <style>
+        /* Lock view height and prevent scroll for native mobile app feel */
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            touch-action: manipulation;
+            background-color: #0d0f12;
+            color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
 
+        /* Glassmorphism subtle inner highlights */
+        .glass-card {
+            background: rgba(18, 22, 31, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6),
+                        inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+        }
+
+        /* Shake animation for invalid attempt */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-9px); }
+            40% { transform: translateX(9px); }
+            60% { transform: translateX(-6px); }
+            80% { transform: translateX(6px); }
+        }
+        .animate-shake {
+            animation: shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        /* Custom dropdown arrow reset */
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+
+        /* Custom scrollbar reset */
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 relative font-sans antialiased text-gray-100">
+
+    <!-- Subtle background backlight glow -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
+        <div class="w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-blue-600/15 rounded-full blur-[120px] transition-all duration-700" id="ambientGlow"></div>
+    </div>
+
+    <!-- Main Card Container -->
+    <main id="authCard" class="glass-card w-full max-w-[400px] rounded-3xl border border-white/10 p-6 sm:p-8 relative z-10 transition-all duration-300">
+        
+        <!-- Header & Logo Section -->
+        <div class="flex flex-col items-center text-center mb-7">
+            <!-- Sleek Security Icon -->
+            <div id="iconBadge" class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4 transition-all duration-300 shadow-inner">
+                <svg id="lockIcon" class="w-6 h-6 text-blue-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+            
+            <span class="text-[10px] font-semibold tracking-widest text-blue-400/90 uppercase bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 mb-2">
+                Playcentrix Portal
+            </span>
+            <h1 class="text-xl font-semibold tracking-tight text-white">Identity Verification</h1>
+            <p class="text-xs text-gray-400 mt-1 font-normal">Enter your security key to proceed</p>
+        </div>
+
+        <!-- Form Fields -->
+        <div class="space-y-4">
+            <!-- Integrated Input & Dropdown Field -->
+            <div id="inputGroup" class="relative flex items-center bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-blue-500/60 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all duration-200">
+                
+                <!-- Code Input Field -->
+                <input 
+                    type="text" 
+                    id="codeInput" 
+                    placeholder="Enter Code" 
+                    maxlength="9"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="characters"
+                    spellcheck="false"
+                    class="w-2/3 bg-transparent px-4 py-3.5 text-white placeholder-gray-500 font-mono text-base font-medium uppercase tracking-wider focus:outline-none"
+                >
+
+                <!-- Separator Line -->
+                <div class="h-6 w-[1px] bg-white/10"></div>
+
+                <!-- Dropdown Select -->
+                <div class="relative w-1/3 flex items-center justify-center bg-white/[0.02]">
+                    <select id="dropdown" class="w-full bg-transparent py-3.5 pl-3 pr-7 text-xs font-semibold tracking-wider text-gray-300 focus:outline-none cursor-pointer">
+                        <option value="FFT" class="bg-[#161a23] text-gray-200">FFT</option>
+                        <option value="PLH" class="bg-[#161a23] text-gray-200">PLH</option>
+                        <option value="RTY" class="bg-[#161a23] text-gray-200">RTY</option>
+                        <option value="QER" class="bg-[#161a23] text-gray-200">QER</option>
+                        <option value="CXV" class="bg-[#161a23] text-gray-200">CXV</option>
+                        <option value="BHL" class="bg-[#161a23] text-gray-200">BHL</option>
+                    </select>
+                    <!-- Chevron Icon -->
+                    <svg class="w-3.5 h-3.5 text-gray-400 absolute right-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Secondary Step: Slide to Authorize -->
+            <div id="sliderWrapper" class="relative">
+                <div class="text-[11px] font-medium text-gray-400 mb-1.5 px-1 flex justify-between items-center">
+                    <span>Secondary Authorization</span>
+                    <span id="slideStatusText" class="text-[10px] text-gray-500">Required</span>
+                </div>
+
+                <div id="sliderTrack" class="relative w-full h-12 bg-black/40 border border-white/10 rounded-2xl overflow-hidden flex items-center p-1 cursor-pointer select-none transition-all duration-200">
+                    
+                    <!-- Progress Fill -->
+                    <div id="sliderFill" class="absolute top-0 left-0 bottom-0 bg-blue-500/20 w-0 transition-all duration-75"></div>
+                    
+                    <!-- Text Overlay -->
+                    <span id="sliderLabel" class="absolute inset-0 flex items-center justify-center text-xs font-medium text-gray-400 pointer-events-none transition-opacity duration-200">
+                        Slide to authorize
+                    </span>
+
+                    <!-- Drag Handle (Thumb) -->
+                    <div id="sliderThumb" class="relative z-10 w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-75 hover:bg-white/15 active:scale-95">
+                        <svg id="thumbIcon" class="w-4 h-4 text-white transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notice / Status Feedback -->
+            <div id="feedbackMsg" class="text-center text-xs font-medium text-red-400 h-4 transition-all opacity-0">
+                Invalid code or security selection
+            </div>
+
+            <!-- Action Button -->
+            <button 
+                id="verifyBtn" 
+                onclick="verifyAuth()"
+                class="w-full h-12 bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white font-medium text-sm rounded-2xl shadow-lg shadow-blue-600/20 border border-blue-400/20 flex items-center justify-center space-x-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <span id="btnText">Verify Identity</span>
+                
+                <!-- Sleek Apple-style Spinner -->
+                <svg id="btnSpinner" class="hidden animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+
+                <!-- Checkmark Icon (Success) -->
+                <svg id="btnCheck" class="hidden w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Footer Branding -->
+        <div class="mt-6 text-center">
+            <span class="text-[10px] text-gray-500 tracking-wider">Playcentrix Auth System v3.2</span>
+        </div>
+    </main>
+
+    <script>
+        const CORRECT_CODE = "A629HP7GF";
+        const CORRECT_DROPDOWN = "CXV";
+
+        // DOM Elements
+        const codeInput = document.getElementById('codeInput');
+        const dropdown = document.getElementById('dropdown');
+        const authCard = document.getElementById('authCard');
+        const inputGroup = document.getElementById('inputGroup');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const btnCheck = document.getElementById('btnCheck');
+        const lockIcon = document.getElementById('lockIcon');
+        const iconBadge = document.getElementById('iconBadge');
+        const ambientGlow = document.getElementById('ambientGlow');
+        const feedbackMsg = document.getElementById('feedbackMsg');
+
+        // Slider Elements
+        const sliderTrack = document.getElementById('sliderTrack');
+        const sliderThumb = document.getElementById('sliderThumb');
+        const sliderFill = document.getElementById('sliderFill');
+        const sliderLabel = document.getElementById('sliderLabel');
+        const slideStatusText = document.getElementById('slideStatusText');
+        const thumbIcon = document.getElementById('thumbIcon');
+
+        // Slider State
+        let isDragging = false;
+        let sliderUnlocked = false;
+        let startX = 0;
+        let currentX = 0;
+        let maxDelta = 0;
+
+        // Auto uppercase logic
+        codeInput.addEventListener('input', () => {
+            codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        });
+
+        function updateMaxDelta() {
+            maxDelta = sliderTrack.clientWidth - sliderThumb.clientWidth - 8; // padding offset
+        }
+        window.addEventListener('resize', updateMaxDelta);
+        updateMaxDelta();
+
+        // Touch & Mouse Drag handlers for Slider
+        function onDragStart(e) {
+            if (sliderUnlocked) return;
+            isDragging = true;
+            updateMaxDelta();
+            startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            sliderTrack.classList.add('border-blue-500/40');
+        }
+
+        function onDragMove(e) {
+            if (!isDragging || sliderUnlocked) return;
+            const x = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            let delta = x - startX;
+            if (delta < 0) delta = 0;
+            if (delta > maxDelta) delta = maxDelta;
+
+            currentX = delta;
+            sliderThumb.style.transform = `translateX(${delta}px)`;
+            sliderFill.style.width = `${delta + 20}px`;
+            
+            // Fade label on drag
+            sliderLabel.style.opacity = Math.max(0, 1 - (delta / (maxDelta * 0.7)));
+        }
+
+        function onDragEnd() {
+            if (!isDragging || sliderUnlocked) return;
+            isDragging = false;
+
+            // Unlocked threshold (80%)
+            if (currentX >= maxDelta * 0.8) {
+                // Success unlock state
+                sliderUnlocked = true;
+                currentX = maxDelta;
+                sliderThumb.style.transform = `translateX(${maxDelta}px)`;
+                sliderFill.style.width = '100%';
+                
+                // Styles for unlocked state
+                sliderTrack.classList.remove('border-white/10', 'border-blue-500/40');
+                sliderTrack.classList.add('border-emerald-500/40', 'bg-emerald-950/20');
+                sliderThumb.classList.remove('bg-white/10');
+                sliderThumb.classList.add('bg-emerald-500', 'border-emerald-400');
+                
+                // Icon update
+                thumbIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>`;
+                sliderLabel.textContent = "Authorized";
+                sliderLabel.classList.remove('text-gray-400');
+                sliderLabel.classList.add('text-emerald-400', 'font-semibold');
+                sliderLabel.style.opacity = '1';
+                slideStatusText.textContent = "Cleared";
+                slideStatusText.classList.replace('text-gray-500', 'text-emerald-400');
+            } else {
+                // Snap back
+                sliderThumb.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                sliderFill.style.transition = 'width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                
+                sliderThumb.style.transform = 'translateX(0px)';
+                sliderFill.style.width = '0px';
+                sliderLabel.style.opacity = '1';
+                sliderTrack.classList.remove('border-blue-500/40');
+
+                setTimeout(() => {
+                    sliderThumb.style.transition = 'transform 0.075s';
+                    sliderFill.style.transition = 'width 0.075s';
+                }, 250);
+            }
+        }
+
+        // Attach Slider Events
+        sliderThumb.addEventListener('mousedown', onDragStart);
+        sliderThumb.addEventListener('touchstart', onDragStart, { passive: true });
+
+        window.addEventListener('mousemove', onDragMove);
+        window.addEventListener('touchmove', onDragMove, { passive: true });
+
+        window.addEventListener('mouseup', onDragEnd);
+        window.addEventListener('touchend', onDragEnd);
+
+        function verifyAuth() {
+            const userCode = codeInput.value.trim();
+            const dropdownValue = dropdown.value;
+
+            // Reset error presentation
+            feedbackMsg.classList.add('opacity-0');
+            inputGroup.classList.remove('border-red-500/80', 'ring-2', 'ring-red-500/20');
+
+            // Pre-validation checks
+            if (!userCode) {
+                showError("Please enter your authorization code.");
+                return;
+            }
+
+            if (!sliderUnlocked) {
+                showError("Please complete the authorization slide.");
+                sliderTrack.classList.add('animate-shake');
+                setTimeout(() => sliderTrack.classList.remove('animate-shake'), 500);
+                return;
+            }
+
+            // Start Loading State
+            verifyBtn.disabled = true;
+            btnText.textContent = "Verifying...";
+            btnSpinner.classList.remove('hidden');
+
+            // Simulated Security Delay for Apple/Google feel
+            setTimeout(() => {
+                const isCodeValid = (userCode === CORRECT_CODE);
+                const isDropdownValid = (dropdownValue === CORRECT_DROPDOWN);
+
+                if (isCodeValid && isDropdownValid) {
+                    // --- SUCCESS STATE ---
+                    btnSpinner.classList.add('hidden');
+                    btnCheck.classList.remove('hidden');
+                    btnText.textContent = "Verified";
+                    
+                    // Button color green
+                    verifyBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+                    verifyBtn.classList.add('bg-emerald-600', 'border-emerald-400/30', 'shadow-emerald-600/20');
+                    
+                    // Header visual update
+                    lockIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
+                    lockIcon.classList.replace('text-blue-400', 'text-emerald-400');
+                    iconBadge.classList.add('border-emerald-500/30', 'bg-emerald-500/10');
+
+                    // Card highlight glow
+                    authCard.classList.add('border-emerald-500/40', 'shadow-[0_0_50px_rgba(16,185,129,0.15)]');
+                    ambientGlow.classList.replace('bg-blue-600/15', 'bg-emerald-600/25');
+
+                    // Redirect transition
+                    setTimeout(() => {
+                        window.location.href = 'step.html';
+                    }, 1800);
+
+                } else {
+                    // --- FAILURE STATE ---
+                    btnSpinner.classList.add('hidden');
+                    verifyBtn.disabled = false;
+                    btnText.textContent = "Verify Identity";
+
+                    showError("Invalid security key or protocol option.");
+                    
+                    // Card Shake & Red Border
+                    authCard.classList.add('animate-shake', 'border-red-500/50');
+                    inputGroup.classList.add('border-red-500/80', 'ring-2', 'ring-red-500/20');
+
+                    setTimeout(() => {
+                        authCard.classList.remove('animate-shake');
+                    }, 500);
+
+                    // Revert error styling after 2.5s
+                    setTimeout(() => {
+                        authCard.classList.remove('border-red-500/50');
+                        inputGroup.classList.remove('border-red-500/80', 'ring-2', 'ring-red-500/20');
+                        feedbackMsg.classList.add('opacity-0');
+                    }, 2500);
+                }
+            }, 1200);
+        }
+
+        function showError(msg) {
+            feedbackMsg.textContent = msg;
+            feedbackMsg.classList.remove('opacity-0');
+        }
+    </script>
 </body>
 </html>
