@@ -2,122 +2,267 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Playcentrix Main</title>
+<!-- Zoom restricted completely as requested -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Playcentrix Reach | Secure Terminal</title>
 <style>
-/* RESET & BASE */
-*{margin:0;padding:0;box-sizing:border-box;font-family: 'Segoe UI', sans-serif;}
-body, html{height:100%;overflow:hidden;background:#f0f2f5;color:#333;}
+/* 
+ * RESET & BASE (Google Sans preferred, fallback to system sans-serif) 
+ */
+@font-face {
+    font-family: 'Google Sans';
+    src: local('Google Sans'), local('Google-Sans'), url(https://fonts.gstatic.com/s/googlesans/v14/4UaGrENHsxJlGDuGo1OIlL3Owp5eKQtG.woff2) format('woff2');
+}
 
-/* TERMINAL */
-#terminalScreen{
-    position:absolute;top:0;left:0;width:100%;height:100%;
-    background:#000;color:#0f0;font-family: monospace;font-size:16px;
-    padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
-    white-space:pre-line;overflow:hidden;
-}
-.cursor{display:inline-block;width:10px;height:18px;background:#0f0;animation:blink 0.7s infinite;}
-@keyframes blink{0%,50%,100%{opacity:1;}25%,75%{opacity:0;}}
+* { margin:0; padding:0; box-sizing:border-box; font-family: 'Google Sans', 'Segoe UI', -apple-system, sans-serif; user-select: none; }
+body, html { height:100%; overflow:hidden; background:#0a0a0c; color:#fff; }
 
-/* DASHBOARD */
-#dashboard{display:none;height:100%;padding:30px;text-align:center;overflow-y:auto;}
-h1{margin-bottom:30px;font-size:1.8rem;color:#333;}
-.optionCard{
-    display:block;width:90%;max-width:300px;margin:15px auto;padding:20px;
-    font-size:1.2rem;border-radius:15px;background:linear-gradient(135deg,#2196F3,#42a5f5);
-    color:white;cursor:pointer;transition:0.3s;box-shadow:0 8px 20px rgba(0,0,0,0.15);
-}
-.optionCard:hover{transform:scale(1.05);box-shadow:0 12px 25px rgba(0,0,0,0.25);}
+/* NEURAL MESH BACKGROUND */
+#canvas-bg { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; opacity: 0.6; }
 
-/* MODAL */
-.modalOverlay{
-    position:fixed;top:0;left:0;width:100%;height:100%;
-    background: rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;
-    opacity:0;visibility:hidden;transition:0.3s;z-index:999;
+/* STAGE CONTAINER */
+.stage {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    z-index:10; opacity:0; visibility:hidden; transition: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.modalOverlay.show{opacity:1;visibility:visible;}
-.modal{
-    width:90%;max-width:400px;background:white;border-radius:20px;padding:25px;text-align:center;
-    position:relative;transform:scale(0.7);opacity:0;transition:0.3s;
+.stage.active { opacity:1; visibility:visible; }
+
+/* GLASSMORPHISM SHARED */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
 }
-.modalOverlay.show .modal{transform:scale(1);opacity:1;}
-.modal h2{margin-bottom:20px;font-size:1.3rem;color:#333;}
-.closeBtn{
-    position:absolute;top:10px;left:10px;font-size:1.2rem;background:#f44336;border:none;color:white;padding:5px 10px;border-radius:6px;cursor:pointer;
-    transition:0.2s;
+
+/* =========================================
+   STAGE 1: 3 SLIDERS
+========================================= */
+#slider-stage h2 { margin-bottom: 40px; font-weight: 400; letter-spacing: 2px; color: #00e5ff; text-shadow: 0 0 15px rgba(0,229,255,0.4); }
+.slider-group { width: 85%; max-width: 400px; padding: 30px; display: flex; flex-direction: column; gap: 25px; }
+.slider-container { position: relative; width: 100%; height: 50px; background: rgba(0,0,0,0.5); border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; }
+.slider-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, #0052d4, #4364f7, #6fb1fc); pointer-events: none; transition: 0.1s; }
+.slider-input { 
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2;
 }
-.closeBtn:hover{background:#d32f2f;}
+.slider-thumb-visual {
+    position: absolute; top: 5px; left: 5px; width: 40px; height: 40px; background: #fff; border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; pointer-events: none;
+    transition: 0.1s; color: #333; font-weight: bold; font-size: 1.2rem;
+}
+
+/* =========================================
+   STAGE 2: TOUCH VERIFICATION
+========================================= */
+#touch-stage h2 { margin-bottom: 20px; font-weight: 400; color: #00e5ff; }
+.touch-instruction { color: rgba(255,255,255,0.6); margin-top: 30px; font-size: 1.1rem; letter-spacing: 1px; }
+.fingerprint-btn {
+    width: 140px; height: 140px; border-radius: 50%; border: 2px dashed rgba(255,255,255,0.2);
+    display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer;
+    transition: 0.3s;
+}
+.fingerprint-btn svg { width: 60px; height: 60px; fill: rgba(255,255,255,0.5); transition: 0.3s; z-index: 2; }
+.touch-ring {
+    position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px;
+    border-radius: 50%; border: 2px solid transparent; 
+    border-top-color: #00e5ff; border-right-color: #00e5ff;
+    opacity: 0; transform: rotate(0deg);
+}
+.fingerprint-btn.scanning .touch-ring {
+    opacity: 1; animation: scanRing 2s linear forwards;
+}
+.fingerprint-btn.scanning svg { fill: #00e5ff; filter: drop-shadow(0 0 10px #00e5ff); transform: scale(1.1); }
+.fingerprint-btn.success { border-color: #00ff88; background: rgba(0,255,136,0.1); }
+.fingerprint-btn.success svg { fill: #00ff88; }
+@keyframes scanRing { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); border-bottom-color: #00e5ff; border-left-color: #00e5ff; } }
+
+/* =========================================
+   STAGE 3: DASHBOARD
+========================================= */
+#dashboard-stage { align-items: stretch; justify-content: flex-start; overflow-y: auto; padding: 40px 20px; padding-bottom: 100px; }
+.dashboard-header { text-align: center; margin-bottom: 40px; }
+.dashboard-header h1 { font-size: 2rem; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 4px; margin-bottom: 10px;}
+.dashboard-header p { color: #00e5ff; font-size: 0.9rem; letter-spacing: 2px; }
+
+.grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; width: 100%; max-width: 1000px; margin: 0 auto; }
+.dashboard-card {
+    padding: 25px; text-align: left; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex; flex-direction: column; justify-content: space-between; min-height: 140px;
+    background: rgba(255, 255, 255, 0.02);
+}
+.dashboard-card:hover { transform: translateY(-5px); background: rgba(255, 255, 255, 0.05); box-shadow: 0 15px 30px rgba(0,229,255,0.1); border-color: rgba(0,229,255,0.3); }
+.dashboard-card i { font-size: 2rem; color: #00e5ff; margin-bottom: 15px; font-style: normal; }
+.dashboard-card h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 8px; }
+.dashboard-card p { font-size: 0.85rem; color: rgba(255,255,255,0.5); }
+
+/* =========================================
+   MODALS & VERIFICATION (Dark UI)
+========================================= */
+.modalOverlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display:flex; justify-content:center; align-items:center;
+    opacity:0; visibility:hidden; transition:0.3s; z-index:999;
+}
+.modalOverlay.show { opacity:1; visibility:visible; }
+.modal {
+    width:90%; max-width:420px; padding:30px; text-align:center; position:relative;
+    transform:scale(0.8) translateY(20px); opacity:0; transition:0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.modalOverlay.show .modal { transform:scale(1) translateY(0); opacity:1; }
+.modal h2 { margin-bottom:25px; font-size:1.4rem; font-weight:500; color:#fff; }
+.closeBtn {
+    position:absolute; top:20px; right:20px; background:rgba(255,255,255,0.1); border:none; color:white;
+    width: 32px; height: 32px; border-radius:50%; cursor:pointer; transition:0.2s;
+}
+.closeBtn:hover { background:#f44336; }
 
 /* INPUT BOXES */
-.input-box{margin:15px 0;border:2px solid #333;border-radius:10px;overflow:hidden;transition:border-color 0.3s;}
-.input-box.correct{border-color:#4CAF50;}
-.input-box.incorrect{border-color:#f44336;}
-input[type="text"], input[type="number"]{
-    width:100%;padding:15px;font-size:1rem;text-align:center;border:none;outline:none;border-radius:10px;
+.input-box { margin:20px 0; border:1px solid rgba(255,255,255,0.2); border-radius:16px; overflow:hidden; transition:0.3s; background: rgba(0,0,0,0.3); }
+.input-box.correct { border-color:#00ff88; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
+.input-box.incorrect { border-color:#f44336; box-shadow: 0 0 15px rgba(244,67,54,0.2); }
+input[type="text"], input[type="number"] {
+    width:100%; padding:20px; font-size:1.8rem; text-align:center; border:none; outline:none; background:transparent; color:#fff; letter-spacing: 8px;
 }
-
-/* VERIFY BUTTON */
-button.verifyBtn{margin-top:15px;padding:15px 30px;border:none;border-radius:10px;background:#2196F3;color:white;font-size:1.1rem;cursor:pointer;transition:0.3s;}
-button.verifyBtn.incorrect{background:#f44336;}
-button.verifyBtn.correct{background:#4CAF50;}
+input::placeholder { color: rgba(255,255,255,0.2); letter-spacing: 1px; font-size: 1rem; }
 
 /* NUMPAD */
-.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:15px;}
-.numpad button{padding:15px 0;font-size:1.2rem;border:none;border-radius:10px;background:#e0e0e0;cursor:pointer;transition:0.2s;box-shadow:0 3px 6px rgba(0,0,0,0.1);}
-.numpad button:active{background:#ccc;transform:scale(0.95);}
+.numpad { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:20px; }
+.numpad button {
+    padding:18px 0; font-size:1.4rem; border:1px solid rgba(255,255,255,0.05); border-radius:14px; 
+    background:rgba(255,255,255,0.03); color:#fff; cursor:pointer; transition:0.2s; backdrop-filter: blur(5px);
+}
+.numpad button:active { background:rgba(255,255,255,0.1); transform:scale(0.92); }
+
+/* VERIFY BUTTON */
+button.verifyBtn {
+    margin-top:25px; padding:18px 30px; width: 100%; border:none; border-radius:14px;
+    background: linear-gradient(135deg, #0052d4, #4364f7); color:white; font-size:1.1rem; font-weight: 500; cursor:pointer; transition:0.3s;
+}
+button.verifyBtn:hover { box-shadow: 0 10px 20px rgba(67,100,247,0.3); }
+button.verifyBtn.incorrect { background: #f44336; }
+button.verifyBtn.correct { background: #00ff88; color: #000; }
+
+/* OPTION BUTTONS INSIDE MODAL */
+.modal-opt-btn {
+    display: block; width: 100%; margin: 10px 0; padding: 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; cursor: pointer; transition: 0.2s;
+}
+.modal-opt-btn:hover { background: rgba(0,229,255,0.1); border-color: #00e5ff; }
 
 /* LOADING OVERLAY */
-.loadingOverlay{
-    position:fixed;top:0;left:0;width:100%;height:100%;
-    background: rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;
-    opacity:0;visibility:hidden;transition:0.3s;z-index:9999;
+.loadingOverlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background: rgba(0,0,0,0.8); backdrop-filter:blur(10px); display:flex; justify-content:center; align-items:center;
+    opacity:0; visibility:hidden; transition:0.3s; z-index:9999;
 }
-.loadingOverlay.show{opacity:1;visibility:visible;}
-.spinner{
-    border:6px solid #f3f3f3;border-top:6px solid #2196F3;border-radius:50%;
-    width:50px;height:50px;animation:spin 1s linear infinite;
+.loadingOverlay.show { opacity:1; visibility:visible; }
+.spinner {
+    border:4px solid rgba(255,255,255,0.1); border-top:4px solid #00e5ff; border-radius:50%;
+    width:60px; height:60px; animation:spin 1s cubic-bezier(0.6, 0.2, 0.4, 0.8) infinite;
 }
 @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
 
-/* CONFETTI */
-.confetti-piece{
-    position:absolute;width:8px;height:8px;background:red;opacity:0.8;
-    top:0;animation:confettiFall 1.5s linear forwards;
-}
-@keyframes confettiFall{0%{transform:translateY(0px) rotate(0deg);}100%{transform:translateY(200px) rotate(360deg);opacity:0;}}
-/* Bigger 4-digit text */
-input[type="number"] {
-    width:100%;
-    padding:15px;
-    font-size:1.5rem;   /* Increased from 1rem */
-    text-align:center;
-    border:none;
-    outline:none;
-    border-radius:10px;
-    letter-spacing:5px; /* Spaced digits for clarity */
-}
+/* PLANT SECRET CSS */
+.secret-container { text-align: center; color: #fff; animation: float 3s ease-in-out infinite; }
+.secret-container span { font-size: 3rem; }
+.secret-container p { color: #a5d6a7; margin-top: 15px; font-size: 1.1rem; line-height: 1.5; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
 </style>
 </head>
 <body>
 
-<!-- Terminal -->
-<div id="terminalScreen"></div>
+<!-- Neural Mesh Background -->
+<canvas id="canvas-bg"></canvas>
 
-<!-- Dashboard -->
-<div id="dashboard">
-    <h1>Playcentrix Control Panel</h1>
-    <button class="optionCard" onclick="openModal('controlApps')">Control Playcentrix Apps</button>
-    <button class="optionCard" onclick="openModal('changeOwner')">Change Playcentrix Ownership</button>
-    <button class="optionCard" onclick="openModal('accessBackup')">Access Backup/Runtime</button>
-    <button class="optionCard" onclick="openModal('revealSecrets')">Reveal All Secrets</button>
-    <button class="optionCard" onclick="openModal('deletePX')">Delete Playcentrix</button>
+<!-- STAGE 1: Sliders -->
+<div id="slider-stage" class="stage active">
+    <h2>INITIALIZE SYSTEMS</h2>
+    <div class="slider-group glass-panel">
+        
+        <div class="slider-container">
+            <div class="slider-fill" id="fill-1"></div>
+            <div class="slider-thumb-visual" id="thumb-1">❯</div>
+            <input type="range" class="slider-input" id="s1" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-container">
+            <div class="slider-fill" id="fill-2"></div>
+            <div class="slider-thumb-visual" id="thumb-2">❯</div>
+            <input type="range" class="slider-input" id="s2" min="0" max="100" value="0">
+        </div>
+
+        <div class="slider-container">
+            <div class="slider-fill" id="fill-3"></div>
+            <div class="slider-thumb-visual" id="thumb-3">❯</div>
+            <input type="range" class="slider-input" id="s3" min="0" max="100" value="0">
+        </div>
+
+    </div>
 </div>
 
-<!-- Modal -->
+<!-- STAGE 2: Touch Verification -->
+<div id="touch-stage" class="stage">
+    <h2>BIOMETRIC OVERRIDE</h2>
+    <div class="fingerprint-btn" id="fp-btn">
+        <div class="touch-ring"></div>
+        <!-- Fingerprint Icon -->
+        <svg viewBox="0 0 24 24">
+            <path d="M17.81 4.47c-.08 0-.16-.02-.23-.06C15.66 3.42 14 3 12.01 3c-1.98 0-3.86.47-5.57 1.41-.24.13-.54.04-.68-.2-.13-.24-.04-.55.2-.68C7.82 2.52 9.86 2 12.01 2c2.13 0 3.99.47 6.03 1.52.25.13.34.43.21.67-.09.18-.26.28-.44.28zM3.5 9.72c-.1 0-.2-.03-.29-.09-.23-.16-.28-.47-.12-.7.99-1.4 2.25-2.5 3.75-3.27C9.98 4.04 14 4.03 17.15 5.65c1.5.77 2.76 1.86 3.75 3.25.16.22.11.54-.12.7-.23.16-.54.11-.7-.12-.89-1.25-2.01-2.22-3.35-2.91-2.83-1.45-6.42-1.44-9.33.02-1.35.68-2.48 1.65-3.37 2.91-.12.18-.32.28-.52.28zM2.08 15.65c-.14 0-.27-.06-.37-.17-.19-.21-.17-.53.04-.72 1.34-1.2 3.12-1.85 5.12-1.85 3.96 0 7.42 2.37 8.93 6.01.07.16.03.35-.1.48-.13.13-.32.17-.48.1-.55-.25-1.13-.38-1.74-.38-2.32 0-4.47 1.58-5.17 3.82-.08.26-.36.41-.62.33-.26-.08-.41-.36-.33-.62.82-2.61 3.32-4.47 6.07-4.47.45 0 .89.09 1.32.25-1.2-2.9-3.95-4.82-7.14-4.82-1.63 0-3.09.52-4.17 1.49-.22.19-.53.17-.72-.04z"/>
+        </svg>
+    </div>
+    <p class="touch-instruction">Hold finger for 2 seconds</p>
+</div>
+
+<!-- STAGE 3: Dashboard -->
+<div id="dashboard-stage" class="stage">
+    <div class="dashboard-header">
+        <h1>Playcentrix Reach</h1>
+        <p>SECURE ADMIN PANEL v2.0</p>
+    </div>
+    
+    <div class="grid-container">
+        <div class="dashboard-card glass-panel" onclick="openModal('controlApps')">
+            <i>⚡</i>
+            <h3>Control Apps</h3>
+            <p>Manage Runtime, Bank, Toolbox & Servers state</p>
+        </div>
+        <div class="dashboard-card glass-panel" onclick="openModal('changeOwner')">
+            <i>👤</i>
+            <h3>Transfer Ownership</h3>
+            <p>Re-assign master admin keys to new user</p>
+        </div>
+        <div class="dashboard-card glass-panel" onclick="openModal('accessBackup')">
+            <i>☁️</i>
+            <h3>Backup / Runtime</h3>
+            <p>Access emergency runtime nodes and local backups</p>
+        </div>
+        <div class="dashboard-card glass-panel" onclick="openModal('advancedStorage')">
+            <i>💾</i>
+            <h3>Storage Purge</h3>
+            <p>Force clear cached local variables and overrides</p>
+        </div>
+        <div class="dashboard-card glass-panel" onclick="openModal('revealSecrets')">
+            <i>👁️</i>
+            <h3>Reveal Secrets</h3>
+            <p>Classified data. Level 4 clearance required.</p>
+        </div>
+        <div class="dashboard-card glass-panel" style="border-color: rgba(244, 67, 54, 0.3);" onclick="openModal('deletePX')">
+            <i style="color: #f44336;">🔥</i>
+            <h3>Delete Playcentrix</h3>
+            <p>Irreversible core system destruction protocol</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
 <div class="modalOverlay" id="modalOverlay">
-    <div class="modal" id="modalContent">
-        <button class="closeBtn" onclick="closeModal()">X</button>
-        <h2 id="modalTitle"></h2>
+    <div class="modal glass-panel" id="modalContent">
+        <button class="closeBtn" onclick="closeModal()">×</button>
+        <h2 id="modalTitle">Title</h2>
         <div id="modalBody"></div>
     </div>
 </div>
@@ -126,128 +271,291 @@ input[type="number"] {
 <div class="loadingOverlay" id="loadingOverlay"><div class="spinner"></div></div>
 
 <script>
-// Terminal
-const terminalScreen=document.getElementById('terminalScreen');
-const dashboard=document.getElementById('dashboard');
-const terminalLines=["Initializing Playcentrix...","Connecting to servers...","Authenticating credentials...","Access granted. Welcome to Playcentrix!"];
-let ti=0;
-function typeLine(){if(ti<terminalLines.length){terminalScreen.textContent+=terminalLines[ti]+"\n";ti++;setTimeout(typeLine,1000);}else{setTimeout(()=>{terminalScreen.style.display='none'; dashboard.style.display='block';},1000);}}
-typeLine();
+/* =========================================
+   BACKGROUND ANIMATION (Neural Mesh)
+========================================= */
+const canvas = document.getElementById('canvas-bg');
+const ctx = canvas.getContext('2d');
+let width, height, particles = [];
 
-// MODAL LOGIC
-const modalOverlay=document.getElementById('modalOverlay');
-const modalTitle=document.getElementById('modalTitle');
-const modalBody=document.getElementById('modalBody');
-const loadingOverlay=document.getElementById('loadingOverlay');
-let currentOwnerName="DefaultOwner";
+function initCanvas() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    particles = [];
+    for(let i = 0; i < 50; i++) {
+        particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            radius: Math.random() * 2 + 1
+        });
+    }
+}
+window.addEventListener('resize', initCanvas);
+initCanvas();
 
-function openModal(action){
-    modalOverlay.classList.add('show'); modalBody.innerHTML="";
-    switch(action){
+function draw() {
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.5)';
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.1)';
+    
+    for(let i = 0; i < particles.length; i++) {
+        let p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        if(p.x < 0 || p.x > width) p.vx *= -1;
+        if(p.y < 0 || p.y > height) p.vy *= -1;
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        for(let j = i + 1; j < particles.length; j++) {
+            let p2 = particles[j];
+            let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+            if(dist < 150) {
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            }
+        }
+    }
+    requestAnimationFrame(draw);
+}
+draw();
+
+/* =========================================
+   STAGE 1: SLIDERS LOGIC
+========================================= */
+const s1 = document.getElementById('s1'); const f1 = document.getElementById('fill-1'); const t1 = document.getElementById('thumb-1');
+const s2 = document.getElementById('s2'); const f2 = document.getElementById('fill-2'); const t2 = document.getElementById('thumb-2');
+const s3 = document.getElementById('s3'); const f3 = document.getElementById('fill-3'); const t3 = document.getElementById('thumb-3');
+
+function updateSlider(s, f, t) {
+    f.style.width = s.value + '%';
+    t.style.left = `calc(${s.value}% - ${s.value * 0.4}px)`;
+    if(s.value == 100) {
+        t.style.background = '#00ff88'; t.style.color = '#000'; t.innerText = '✓';
+    } else {
+        t.style.background = '#fff'; t.style.color = '#333'; t.innerText = '❯';
+    }
+    checkAllSliders();
+}
+
+[ [s1,f1,t1], [s2,f2,t2], [s3,f3,t3] ].forEach(arr => {
+    arr[0].addEventListener('input', () => updateSlider(arr[0], arr[1], arr[2]));
+});
+
+function checkAllSliders() {
+    if(s1.value == 100 && s2.value == 100 && s3.value == 100) {
+        setTimeout(() => {
+            document.getElementById('slider-stage').classList.remove('active');
+            document.getElementById('touch-stage').classList.add('active');
+        }, 400);
+    }
+}
+
+/* =========================================
+   STAGE 2: TOUCH / BIOMETRIC LOGIC
+========================================= */
+const fpBtn = document.getElementById('fp-btn');
+let touchTimer;
+
+function startTouch(e) {
+    e.preventDefault(); // Prevent accidental scroll/zoom interactions
+    fpBtn.classList.add('scanning');
+    touchTimer = setTimeout(() => {
+        // SUCCESS: 2 Seconds Completed
+        fpBtn.classList.remove('scanning');
+        fpBtn.classList.add('success');
+        
+        // DESTROY SPECIFIC CODE FROM LOCAL STORAGE IMMEDIATELY
+        localStorage.removeItem('6776');
+        console.log("6776 code purged from local storage.");
+
+        setTimeout(() => {
+            document.getElementById('touch-stage').classList.remove('active');
+            document.getElementById('dashboard-stage').classList.add('active');
+        }, 800);
+    }, 2000);
+}
+
+function stopTouch() {
+    fpBtn.classList.remove('scanning');
+    clearTimeout(touchTimer);
+}
+
+// Bind to both mouse and touch events
+fpBtn.addEventListener('mousedown', startTouch);
+fpBtn.addEventListener('touchstart', startTouch, {passive: false});
+window.addEventListener('mouseup', stopTouch);
+window.addEventListener('touchend', stopTouch);
+
+/* =========================================
+   MODAL & DASHBOARD LOGIC
+========================================= */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const loadingOverlay = document.getElementById('loadingOverlay');
+let currentOwnerName = "Admin";
+
+function openModal(action) {
+    modalOverlay.classList.add('show'); modalBody.innerHTML = "";
+    switch(action) {
         case "controlApps":
-            modalTitle.textContent="Control Playcentrix Apps";
-            ["Playcentrix Runtime","Playcentrix Toolbox","Playcentrix Bank","Playcentrix Servers"].forEach(app=>{const btn=document.createElement('button');btn.textContent=app;btn.className='optionCard';btn.onclick=()=>showOnOff(app);modalBody.appendChild(btn);});
+            modalTitle.textContent = "System Apps Control";
+            ["Playcentrix Runtime", "Playcentrix Toolbox", "Playcentrix Bank", "Playcentrix Servers"].forEach(app => {
+                const btn = document.createElement('button'); btn.textContent = app; btn.className = 'modal-opt-btn';
+                btn.onclick = () => showOnOff(app); modalBody.appendChild(btn);
+            });
             break;
         case "changeOwner":
-            modalTitle.textContent="Change Ownership";
-            modalBody.innerHTML=`<div class="input-box"><input type="text" id="newOwner" placeholder="Enter New Owner Name"></div>
-            <button class="verifyBtn" onclick="changeOwner()">Change</button>`;
+            modalTitle.textContent = "Transfer Ownership";
+            modalBody.innerHTML = `<div class="input-box"><input type="text" id="newOwner" placeholder="New Owner Name"></div>
+            <button class="verifyBtn" onclick="changeOwner()">Initiate Transfer</button>`;
             break;
         case "accessBackup":
-            modalTitle.textContent="Access Backup/Runtime";
-            ["Backup","Runtime"].forEach(opt=>{const btn=document.createElement('button');btn.textContent=opt;btn.className='optionCard';btn.onclick=()=>showOnOff(opt);modalBody.appendChild(btn);});
+            modalTitle.textContent = "Backup & Runtime";
+            ["Initialize Backup Protocol", "Engage Emergency Runtime"].forEach(opt => {
+                const btn = document.createElement('button'); btn.textContent = opt; btn.className = 'modal-opt-btn';
+                btn.onclick = () => showOnOff(opt); modalBody.appendChild(btn);
+            });
+            break;
+        case "advancedStorage":
+            modalTitle.textContent = "Local Storage Management";
+            modalBody.innerHTML = `
+                <p style="color:rgba(255,255,255,0.7);margin-bottom:15px;font-size:0.9rem;">Purge all local cache entries instantly.</p>
+                <button class="verifyBtn" onclick="verifyFourDigit('Purge Storage')">Authorize Purge</button>`;
             break;
         case "revealSecrets":
-            modalTitle.textContent="Reveal All Secrets";
-            modalBody.innerHTML=`<button class="verifyBtn" onclick="verifyFourDigit('Reveal Secrets')">Enter 4-digit key</button>`;
+            modalTitle.textContent = "Classified Vault";
+            modalBody.innerHTML = `
+                <p style="color:rgba(255,255,255,0.5);margin-bottom:15px;font-size:0.9rem;">Enter admin 4-digit key to unlock.</p>
+                <button class="verifyBtn" onclick="verifyFourDigit('Reveal Secrets')">Enter Passcode</button>`;
             break;
         case "deletePX":
-            modalTitle.textContent="Delete Playcentrix";
-            modalBody.innerHTML=`<p>Are you sure?</p><button class="verifyBtn" onclick="confirmDelete()">Yes</button>`;
+            modalTitle.textContent = "System Deletion Protocol";
+            modalBody.innerHTML = `<p style="color:#f44336;margin-bottom:20px;">WARNING: This will format the entire grid.</p>
+            <button class="verifyBtn incorrect" onclick="confirmDelete()">Proceed to Terminate</button>`;
             break;
     }
 }
-function closeModal(){modalOverlay.classList.remove('show');}
+function closeModal() { modalOverlay.classList.remove('show'); }
 
-// ON/OFF
-function showOnOff(name){modalBody.innerHTML=`<p>${name}</p><button class="optionCard" onclick="verifyFourDigit('${name} On')">On</button><button class="optionCard" onclick="verifyFourDigit('${name} Off')">Off</button>`;}
-
-// CHANGE OWNER
-function changeOwner(){const owner=document.getElementById('newOwner').value.trim();if(owner===""){alert("Enter owner name!");return;}currentOwnerName=owner;verifyFourDigit("Change Ownership");}
-
-// FOUR DIGIT VERIFICATION
-function verifyFourDigit(action){
-    modalBody.innerHTML=`<div class="input-box" id="fourDigitBox"><input type="number" id="fourDigitInput" placeholder="Enter 4-digit key" inputmode="numeric" readonly></div>
-    <button class="verifyBtn" id="fourDigitBtn">Verify</button>`;
-    generateNumpad('fourDigit');
-    document.getElementById('fourDigitBtn').onclick=()=>checkFourDigit(action);
+function showOnOff(name) {
+    modalBody.innerHTML = `<p style="margin-bottom:15px;color:#00e5ff;">Target: ${name}</p>
+    <button class="modal-opt-btn" onclick="verifyFourDigit('${name} ACTIVATE')">ACTIVATE</button>
+    <button class="modal-opt-btn" onclick="verifyFourDigit('${name} DEACTIVATE')">DEACTIVATE</button>`;
 }
 
-// NUMPAD
-function generateNumpad(containerId){
-    const box=document.getElementById('fourDigitBox');
-    const numpadDiv=document.createElement('div'); numpadDiv.className="numpad";
-    for(let n=1;n<=9;n++){const btn=document.createElement('button');btn.textContent=n;btn.onclick=()=>addDigit(n);numpadDiv.appendChild(btn);}
-    const zeroBtn=document.createElement('button');zeroBtn.textContent=0;zeroBtn.onclick=()=>addDigit(0);numpadDiv.appendChild(zeroBtn);
-    box.appendChild(numpadDiv);
-}
-function addDigit(num){
-    const input=document.getElementById('fourDigitInput');
-    if(input.value.length<4) input.value+=num;
+function changeOwner() {
+    const owner = document.getElementById('newOwner').value.trim();
+    if(owner === "") { alert("Enter a valid name."); return; }
+    currentOwnerName = owner;
+    verifyFourDigit("Change Ownership");
 }
 
-// CHECK FOUR DIGIT
-function checkFourDigit(action){
-    const input=document.getElementById('fourDigitInput');
-    const box=document.getElementById('fourDigitBox');
-    const btn=document.getElementById('fourDigitBtn');
-    loadingOverlay.classList.add('show');
-    setTimeout(()=>{
-        loadingOverlay.classList.remove('show');
-        if(input.value==='1584'){
-    box.classList.add('correct'); btn.classList.add('correct'); btn.textContent="Verified!";
-    if(action==="Change Ownership") sendTelegram(`✅ Action: ${action} successful, Owner: ${currentOwnerName}`);
-    else sendTelegram(`✅ Action: ${action} successful`);
-
-    setTimeout(()=>{
-        if(action==="Reveal Secrets"){
-            // Show secret page
-            modalBody.innerHTML = `
-                <button class="closeBtn" onclick="closeModal()">X</button>
-                <h2>Hello World! This is a secret</h2>
-            `;
-        } else {
-            confettiEffect();
-            closeModal();
-        }
-    },1000);
-} else{
-            box.classList.add('incorrect'); btn.classList.add('incorrect'); btn.textContent="Incorrect";
-            sendTelegram(`❌ Action: ${action} failed`);
-            setTimeout(()=>{box.classList.remove('incorrect'); btn.classList.remove('incorrect'); btn.textContent="Verify"; input.value="";},2000);
-        }
-    },2000);
+/* =========================================
+   4-DIGIT VERIFICATION (Now 4321)
+========================================= */
+function verifyFourDigit(action) {
+    modalBody.innerHTML = `
+    <div class="input-box" id="fourDigitBox">
+        <input type="password" id="fourDigitInput" placeholder="••••" inputmode="numeric" readonly>
+    </div>
+    <button class="verifyBtn" id="fourDigitBtn">Authenticate</button>`;
+    generateNumpad();
+    document.getElementById('fourDigitBtn').onclick = () => checkFourDigit(action);
 }
 
-// DELETE
-function confirmDelete(){modalBody.innerHTML=`<div class="input-box"><input type="text" id="deleteConfirm" placeholder="Type Confirm"></div><button class="verifyBtn" onclick="finalDelete()">Verify</button>`;}
-function finalDelete(){const val=document.getElementById('deleteConfirm').value;if(val==="Confirm"){verifyFourDigit("Delete Playcentrix");}else{alert("Type 'Confirm' to proceed!");}}
-
-// TELEGRAM
-function sendTelegram(message){
-    const token="7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
-    const chat_id="1561851616";
-    fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`);
-}
-
-// CONFETTI
-function confettiEffect(){
-    for(let i=0;i<50;i++){
-        const div=document.createElement('div');div.className='confetti-piece';
-        div.style.background=`hsl(${Math.random()*360},80%,60%)`;div.style.left=Math.random()*100+'%';
-        div.style.animationDelay=Math.random()+'s';document.body.appendChild(div);
-        setTimeout(()=>{div.remove();},1500);
+function generateNumpad() {
+    const box = document.getElementById('modalBody');
+    const numpadDiv = document.createElement('div'); numpadDiv.className = "numpad";
+    for(let n=1; n<=9; n++) {
+        const btn = document.createElement('button'); btn.textContent = n; 
+        btn.onclick = () => addDigit(n); numpadDiv.appendChild(btn);
     }
+    const delBtn = document.createElement('button'); delBtn.textContent = '←'; delBtn.onclick = removeDigit; numpadDiv.appendChild(delBtn);
+    const zeroBtn = document.createElement('button'); zeroBtn.textContent = 0; zeroBtn.onclick = () => addDigit(0); numpadDiv.appendChild(zeroBtn);
+    const clrBtn = document.createElement('button'); clrBtn.textContent = 'C'; clrBtn.onclick = clearDigits; numpadDiv.appendChild(clrBtn);
+    box.insertBefore(numpadDiv, document.getElementById('fourDigitBtn'));
+}
+
+function addDigit(num) {
+    const input = document.getElementById('fourDigitInput');
+    if(input.value.length < 4) input.value += num;
+}
+function removeDigit() {
+    const input = document.getElementById('fourDigitInput');
+    input.value = input.value.slice(0, -1);
+}
+function clearDigits() {
+    document.getElementById('fourDigitInput').value = "";
+}
+
+function checkFourDigit(action) {
+    const input = document.getElementById('fourDigitInput');
+    const box = document.getElementById('fourDigitBox');
+    const btn = document.getElementById('fourDigitBtn');
+    
+    loadingOverlay.classList.add('show');
+    
+    setTimeout(() => {
+        loadingOverlay.classList.remove('show');
+        // REPLACED OLD CODE WITH 4321
+        if(input.value === '4321') {
+            box.classList.add('correct'); btn.classList.add('correct'); btn.textContent = "ACCESS GRANTED";
+            if(action === "Change Ownership") sendTelegram(`✅ Action: ${action} successful, Owner: ${currentOwnerName}`);
+            else sendTelegram(`✅ Action: ${action} successful`);
+
+            setTimeout(() => {
+                if(action === "Reveal Secrets") {
+                    // PLANT SECRET PAGE!
+                    modalBody.innerHTML = `
+                        <button class="closeBtn" onclick="closeModal()">×</button>
+                        <div class="secret-container">
+                            <span>🌿👀🌿</span>
+                            <h2>The Plants Have Entered!</h2>
+                            <p>Warning: Photosynthesis overrides detected.<br><br>Did you know plants can actually "hear" caterpillars eating them and release defensive chemicals in response? Nature's own firewall.</p>
+                            <br>
+                            <p style="color:#00e5ff; font-size: 0.8rem;">[ Secret completely remapped for fun ]</p>
+                        </div>
+                    `;
+                } else {
+                    closeModal();
+                }
+            }, 1000);
+        } else {
+            box.classList.add('incorrect'); btn.classList.add('incorrect'); btn.textContent = "DENIED";
+            sendTelegram(`❌ Action: ${action} failed. Attempt: ${input.value}`);
+            setTimeout(() => {
+                box.classList.remove('incorrect'); btn.classList.remove('incorrect'); 
+                btn.textContent = "Authenticate"; input.value = "";
+            }, 1500);
+        }
+    }, 1200);
+}
+
+/* =========================================
+   DELETE & TELEGRAM
+========================================= */
+function confirmDelete() {
+    modalBody.innerHTML = `
+        <div class="input-box"><input type="text" id="deleteConfirm" placeholder="Type CONFIRM"></div>
+        <button class="verifyBtn incorrect" onclick="finalDelete()">VERIFY DELETION</button>`;
+}
+function finalDelete() {
+    const val = document.getElementById('deleteConfirm').value;
+    if(val.toUpperCase() === "CONFIRM") { verifyFourDigit("Delete Playcentrix"); } 
+    else { alert("You must type 'CONFIRM' to proceed."); }
+}
+
+function sendTelegram(message) {
+    const token = "7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
+    const chat_id = "1561851616";
+    fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`).catch(err=>console.log("Telemetry off grid"));
 }
 </script>
 </body>
