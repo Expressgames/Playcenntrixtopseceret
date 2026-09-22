@@ -601,2131 +601,1724 @@ html, body {
 </div>
 
 <script>
-// ============================================================
-// PLAYCENTRIX REACH - FULL SCRIPT
-// AUDIO SYSTEM:
-//   • Uses ONLY MainIntro.mp3
-//   • NO generated siren / oscillator fallback
-//   • Unlocks Web Audio during the actual touch
-//   • Downloads + decodes MainIntro.mp3 immediately
-//   • Starts the decoded MP3 immediately when verification ends
-//   • Handles iPhone Safari + Android Chrome
-// ============================================================
+/* ============================================================
+   PLAYCENTRIX REACH
+   SECURE TERMINAL — COMPLETE VERIFICATION SCRIPT
+
+   AUDIO DESIGN
+   ------------------------------------------------------------
+   MainIntro.mp3:
+     • Preloaded immediately on page load
+     • Decoded into an AudioBuffer
+     • NEVER played before verification completion
+     • Starts EXACTLY at verification = 100%
+     • Starts from 0:00
+     • Volume = 50%
+     • No synthetic fallback
+     • No second tap
+     • No HTMLAudioElement.play()
+   ============================================================ */
 
 
-// ============================================================
-// ROBUST MAIN AUDIO ENGINE
-// ============================================================
+/* ============================================================
+   CONFIGURATION
+   ============================================================ */
 
 const MAIN_AUDIO_URL = './MainIntro.mp3';
 
+const MAIN_AUDIO_VOLUME = 0.50;
+
+const VERIFICATION_DURATION = 2000; // 2 seconds
+
+const AUTHORIZATION_DURATION = 5500; // 5.5 seconds
+
+
+/* ============================================================
+   AUDIO STATE
+   ============================================================ */
+
 let audioContext = null;
-let decodedMainAudio = null;
-let audioSourceNode = null;
+
+let mainAudioBuffer = null;
+
+let audioPreparePromise = null;
+
+let mainAudioSource = null;
+
+let mainAudioGain = null;
 
 let audioUnlocked = false;
-let audioDecodePromise = null;
-let audioPlayRequested = false;
-let audioStarted = false;
+
+let audioPlaying = false;
+
+let audioPrepared = false;
 
 
-// ------------------------------------------------------------
-// DEVICE DETECTION
-// ------------------------------------------------------------
+/* ============================================================
+   VERIFICATION STATE
+   ============================================================ */
 
-const isIOS =
-  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (
-    navigator.platform === 'MacIntel' &&
-    navigator.maxTouchPoints > 1
-  );
+let verificationActive = false;
 
-const isAndroid =
-  /Android/i.test(navigator.userAgent);
+let verificationCompleted = false;
+
+let verificationStartTime = 0;
+
+let verificationFrame = null;
+
+let verificationPointerId = null;
+
+let scanProgress = 0;
 
 
-// ------------------------------------------------------------
-// AUDIO CONTEXT CREATION
-// ------------------------------------------------------------
+/* ============================================================
+   AUTHORIZATION STATE
+   ============================================================ */
+
+let authorizationTimer = null;
+
+let authorizationStarted = false;
+
+
+/* ============================================================
+   SAFE DOM HELPERS
+   ============================================================ */
+
+function $(id) {
+    return document.getElementById(id);
+}
+
+
+/* ============================================================
+   AUDIO CONTEXT
+   ============================================================ */
 
 function getAudioContext() {
 
-  try {
+    if (audioContext) {
+        return audioContext;
+    }
 
     const AudioContextClass =
-      window.AudioContext ||
-      window.webkitAudioContext;
+        window.AudioContext ||
+        window.webkitAudioContext;
 
     if (!AudioContextClass) {
 
-      console.error(
-        '[Audio] Web Audio API is unavailable.'
-      );
+        console.error(
+            '[Reach Audio] Web Audio API unavailable.'
+        );
 
-      return null;
+        return null;
     }
 
-    if (!audioContext) {
+    try {
 
-      audioContext =
-        new AudioContextClass();
+        audioContext =
+            new AudioContextClass();
 
-      console.log(
-        '[Audio] AudioContext created:',
-        audioContext.state
-      );
+        console.log(
+            '[Reach Audio] AudioContext created:',
+            audioContext.state
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[Reach Audio] AudioContext creation failed:',
+            error
+        );
+
+        audioContext = null;
     }
 
     return audioContext;
-
-  } catch (error) {
-
-    console.error(
-      '[Audio] Could not create AudioContext:',
-      error
-    );
-
-    return null;
-  }
 }
 
 
-// ------------------------------------------------------------
-// UNLOCK AUDIO DURING USER TOUCH
-// ------------------------------------------------------------
+/* ============================================================
+   UNLOCK AUDIO
+   ------------------------------------------------------------
+   IMPORTANT:
+   This function is called directly from pointerdown.
 
-async function unlockAudioImmediately() {
+   We unlock the AudioContext here, but DO NOT start
+   MainIntro.mp3 here.
+   ============================================================ */
 
-  const ctx =
-    getAudioContext();
+function unlockAudio() {
 
-  if (!ctx) {
-    return false;
-  }
+    const ctx = getAudioContext();
 
-  try {
-
-    if (
-      ctx.state === 'suspended' ||
-      ctx.state === 'interrupted'
-    ) {
-
-      await ctx.resume();
-
-      console.log(
-        '[Audio] AudioContext resumed:',
-        ctx.state
-      );
+    if (!ctx) {
+        return;
     }
 
+    if (ctx.state === 'suspended') {
 
-    // Small silent buffer.
-    // This is NOT used as the actual sound.
-    // It only initializes the audio output while the
-    // user is actively touching the screen.
+        ctx.resume()
+            .then(() => {
 
-    const silentBuffer =
-      ctx.createBuffer(
-        1,
-        1,
-        22050
-      );
+                audioUnlocked = true;
 
-    const silentSource =
-      ctx.createBufferSource();
+                console.log(
+                    '[Reach Audio] Context unlocked.'
+                );
 
-    silentSource.buffer =
-      silentBuffer;
+            })
+            .catch(error => {
 
-    silentSource.connect(
-      ctx.destination
-    );
+                console.error(
+                    '[Reach Audio] Context resume failed:',
+                    error
+                );
 
-    silentSource.start(0);
+            });
 
+    } else {
 
-    audioUnlocked = true;
+        audioUnlocked = true;
 
-    console.log(
-      '[Audio] Audio system unlocked during user gesture.'
-    );
-
-    return true;
-
-  } catch (error) {
-
-    console.error(
-      '[Audio] Audio unlock failed:',
-      error
-    );
-
-    audioUnlocked = false;
-
-    return false;
-  }
+    }
 }
 
 
-// ------------------------------------------------------------
-// FETCH + DECODE THE ACTUAL MP3
-// ------------------------------------------------------------
+/* ============================================================
+   PRELOAD + DECODE MAININTRO.MP3
+   ------------------------------------------------------------
+   This happens immediately when the page loads.
+   ============================================================ */
 
 async function prepareMainAudio() {
 
-  if (decodedMainAudio) {
+    if (mainAudioBuffer) {
+        return mainAudioBuffer;
+    }
 
-    console.log(
-      '[Audio] MainIntro.mp3 already decoded.'
-    );
+    if (audioPreparePromise) {
+        return audioPreparePromise;
+    }
 
-    return decodedMainAudio;
-  }
+    const ctx = getAudioContext();
 
+    if (!ctx) {
+        return null;
+    }
 
-  if (audioDecodePromise) {
-    return audioDecodePromise;
-  }
+    audioPreparePromise = (async () => {
 
+        try {
 
-  audioDecodePromise =
-    (async () => {
+            console.log(
+                '[Reach Audio] Loading MainIntro.mp3...'
+            );
 
-      try {
-
-        const ctx =
-          getAudioContext();
-
-        if (!ctx) {
-          throw new Error(
-            'Web Audio API unavailable.'
-          );
-        }
-
-
-        console.log(
-          '[Audio] Downloading actual:',
-          MAIN_AUDIO_URL
-        );
+            const response =
+                await fetch(
+                    MAIN_AUDIO_URL,
+                    {
+                        method: 'GET',
+                        cache: 'force-cache'
+                    }
+                );
 
 
-        const response =
-          await fetch(
-            MAIN_AUDIO_URL,
-            {
-              method: 'GET',
-              cache: 'force-cache',
-              credentials: 'same-origin'
+            if (!response.ok) {
+
+                throw new Error(
+                    'HTTP ' + response.status
+                );
             }
-          );
 
 
-        if (!response.ok) {
+            const arrayBuffer =
+                await response.arrayBuffer();
 
-          throw new Error(
-            `HTTP ${response.status} while loading MainIntro.mp3`
-          );
+
+            console.log(
+                '[Reach Audio] MainIntro.mp3 downloaded.'
+            );
+
+
+            /*
+             * Decode the ACTUAL MP3.
+             *
+             * Nothing is played here.
+             */
+
+            const decodedBuffer =
+                await ctx.decodeAudioData(
+                    arrayBuffer
+                );
+
+
+            mainAudioBuffer =
+                decodedBuffer;
+
+            audioPrepared = true;
+
+
+            console.log(
+                '[Reach Audio] MainIntro.mp3 READY.',
+                decodedBuffer.duration.toFixed(3),
+                'seconds'
+            );
+
+
+            return decodedBuffer;
+
+        } catch (error) {
+
+            audioPrepared = false;
+
+            console.error(
+                '[Reach Audio] MainIntro.mp3 preparation failed:',
+                error
+            );
+
+            /*
+             * No fake audio.
+             * No oscillator.
+             * No retry loop that could create weird timing.
+             */
+
+            audioPreparePromise = null;
+
+            return null;
         }
-
-
-        const arrayBuffer =
-          await response.arrayBuffer();
-
-
-        if (!arrayBuffer.byteLength) {
-
-          throw new Error(
-            'MainIntro.mp3 downloaded with zero bytes.'
-          );
-        }
-
-
-        console.log(
-          '[Audio] MP3 downloaded:',
-          arrayBuffer.byteLength,
-          'bytes'
-        );
-
-
-        // Decode THE ACTUAL MP3.
-        // No synthesized sound is involved.
-
-        const audioBuffer =
-          await ctx.decodeAudioData(
-            arrayBuffer
-          );
-
-
-        if (!audioBuffer) {
-
-          throw new Error(
-            'decodeAudioData returned no AudioBuffer.'
-          );
-        }
-
-
-        decodedMainAudio =
-          audioBuffer;
-
-
-        console.log(
-          '[Audio] MainIntro.mp3 decoded successfully.'
-        );
-
-        console.log(
-          '[Audio] Duration:',
-          audioBuffer.duration,
-          'seconds'
-        );
-
-        console.log(
-          '[Audio] Sample rate:',
-          audioBuffer.sampleRate
-        );
-
-        console.log(
-          '[Audio] Channels:',
-          audioBuffer.numberOfChannels
-        );
-
-
-        return decodedMainAudio;
-
-      } catch (error) {
-
-        console.error(
-          '[Audio] ❌ MP3 preparation failed:',
-          error
-        );
-
-        decodedMainAudio =
-          null;
-
-        throw error;
-      }
 
     })();
 
 
-  return audioDecodePromise;
+    return audioPreparePromise;
 }
 
 
-// ------------------------------------------------------------
-// PLAY THE DECODED MAININTRO.MP3
-// ------------------------------------------------------------
+/* ============================================================
+   STOP PREVIOUS AUDIO SOURCE
+   ============================================================ */
 
-async function playDecodedMainAudio() {
+function cleanupAudioSource() {
 
-  audioPlayRequested = true;
+    if (mainAudioSource) {
+
+        try {
+            mainAudioSource.onended = null;
+        } catch (_) {}
+
+        try {
+            mainAudioSource.stop(0);
+        } catch (_) {}
+
+        try {
+            mainAudioSource.disconnect();
+        } catch (_) {}
+
+        mainAudioSource = null;
+    }
 
 
-  try {
+    if (mainAudioGain) {
 
-    const ctx =
-      getAudioContext();
+        try {
+            mainAudioGain.disconnect();
+        } catch (_) {}
+
+        mainAudioGain = null;
+    }
+
+
+    audioPlaying = false;
+}
+
+
+/* ============================================================
+   PLAY MAININTRO.MP3
+   ------------------------------------------------------------
+   THIS FUNCTION IS CALLED ONLY AT 100%.
+   ============================================================ */
+
+function startMainIntroAt100Percent() {
+
+    const ctx = getAudioContext();
+
+
+    /*
+     * The MP3 should already be decoded.
+     */
 
     if (!ctx) {
 
-      throw new Error(
-        'AudioContext unavailable.'
-      );
+        console.error(
+            '[Reach Audio] Cannot start audio: no AudioContext.'
+        );
+
+        return false;
     }
 
 
-    // If Safari has interrupted the context,
-    // attempt recovery before playback.
+    if (!mainAudioBuffer) {
 
-    if (
-      ctx.state === 'suspended' ||
-      ctx.state === 'interrupted'
-    ) {
+        console.error(
+            '[Reach Audio] Cannot start audio: MainIntro.mp3 is not ready.'
+        );
 
-      try {
+        return false;
+    }
 
-        await ctx.resume();
+
+    try {
+
+        /*
+         * Make sure the context is running.
+         */
+
+        if (ctx.state === 'suspended') {
+
+            /*
+             * Normally this has already been resumed by
+             * the orb pointerdown.
+             *
+             * We request resume here as an additional
+             * safety measure.
+             */
+
+            ctx.resume().catch(() => {});
+        }
+
+
+        /*
+         * Clean any old source.
+         */
+
+        cleanupAudioSource();
+
+
+        /* ====================================================
+           GAIN NODE
+           EXACTLY 50%
+           ==================================================== */
+
+        const gain =
+            ctx.createGain();
+
+        gain.gain.setValueAtTime(
+            MAIN_AUDIO_VOLUME,
+            ctx.currentTime
+        );
+
+
+        /* ====================================================
+           ACTUAL MP3 BUFFER SOURCE
+           ==================================================== */
+
+        const source =
+            ctx.createBufferSource();
+
+
+        source.buffer =
+            mainAudioBuffer;
+
+
+        source.loop = false;
+
+
+        /* ====================================================
+           AUDIO ROUTING
+
+           MainIntro.mp3
+                ↓
+           Gain = 0.50
+                ↓
+           Speakers
+           ==================================================== */
+
+        source.connect(gain);
+
+        gain.connect(ctx.destination);
+
+
+        /*
+         * Store references.
+         */
+
+        mainAudioSource = source;
+
+        mainAudioGain = gain;
+
+
+        /* ====================================================
+           START ACTUAL MP3
+
+           start(0) = start immediately from buffer position 0.
+           ==================================================== */
+
+        source.start(0);
+
+
+        audioPlaying = true;
+
 
         console.log(
-          '[Audio] Context recovered:',
-          ctx.state
+            '[Reach Audio] MainIntro.mp3 STARTED — 100%'
         );
 
-      } catch (resumeError) {
-
-        console.warn(
-          '[Audio] Context resume failed:',
-          resumeError
+        console.log(
+            '[Reach Audio] Start position: 0.000s'
         );
-      }
+
+        console.log(
+            '[Reach Audio] Volume: 50%'
+        );
+
+
+        source.onended = () => {
+
+            audioPlaying = false;
+
+            if (mainAudioSource === source) {
+                mainAudioSource = null;
+            }
+
+            if (mainAudioGain === gain) {
+                mainAudioGain = null;
+            }
+
+
+            try {
+                source.disconnect();
+            } catch (_) {}
+
+
+            try {
+                gain.disconnect();
+            } catch (_) {}
+
+
+            console.log(
+                '[Reach Audio] MainIntro.mp3 finished.'
+            );
+
+        };
+
+
+        return true;
+
+
+    } catch (error) {
+
+        audioPlaying = false;
+
+        console.error(
+            '[Reach Audio] MP3 playback error:',
+            error
+        );
+
+        return false;
+    }
+}
+
+
+/* ============================================================
+   AUDIO INITIALIZATION
+   ------------------------------------------------------------
+   Runs immediately.
+   ============================================================ */
+
+function initializeAudioSystem() {
+
+    getAudioContext();
+
+    /*
+     * Start downloading/decoding immediately.
+     *
+     * IMPORTANT:
+     * This does NOT play the sound.
+     */
+
+    prepareMainAudio()
+        .then(buffer => {
+
+            if (buffer) {
+
+                console.log(
+                    '[Reach Audio] System ready for verification.'
+                );
+
+            }
+
+        });
+
+}
+
+
+/* ============================================================
+   INITIALIZE AUDIO AS EARLY AS POSSIBLE
+   ============================================================ */
+
+if (
+    document.readyState === 'loading'
+) {
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        initializeAudioSystem,
+        {
+            once: true
+        }
+    );
+
+} else {
+
+    initializeAudioSystem();
+
+}
+
+
+/* ============================================================
+   VISIBILITY RECOVERY
+   ============================================================ */
+
+document.addEventListener(
+    'visibilitychange',
+    () => {
+
+        if (
+            !document.hidden &&
+            audioContext &&
+            audioContext.state === 'suspended'
+        ) {
+
+            audioContext.resume()
+                .then(() => {
+                    audioUnlocked = true;
+                })
+                .catch(() => {});
+
+        }
+
+    }
+);
+
+
+/* ============================================================
+   NEURAL BACKGROUND
+   ------------------------------------------------------------
+   Preserves the animated canvas if present.
+   ============================================================ */
+
+const canvas =
+    $('neuralCanvas');
+
+if (canvas) {
+
+    const ctx =
+        canvas.getContext('2d');
+
+    let width = 0;
+    let height = 0;
+
+    const nodes = [];
+
+    const NODE_COUNT = 55;
+
+    function resizeNeuralCanvas() {
+
+        width =
+            canvas.width =
+            window.innerWidth;
+
+        height =
+            canvas.height =
+            window.innerHeight;
+
     }
 
 
-    // If decoding hasn't completed yet,
-    // wait for the SAME actual MP3.
+    function createNodes() {
 
-    if (!decodedMainAudio) {
+        nodes.length = 0;
 
-      console.log(
-        '[Audio] Waiting for MainIntro.mp3 decoding...'
-      );
+        for (
+            let i = 0;
+            i < NODE_COUNT;
+            i++
+        ) {
 
-      await prepareMainAudio();
+            nodes.push({
+
+                x:
+                    Math.random() * width,
+
+                y:
+                    Math.random() * height,
+
+                vx:
+                    (Math.random() - 0.5) * 0.35,
+
+                vy:
+                    (Math.random() - 0.5) * 0.35
+
+            });
+
+        }
+
     }
 
 
-    if (!decodedMainAudio) {
+    function drawNeuralNetwork() {
 
-      throw new Error(
-        'MainIntro.mp3 is not decoded.'
-      );
+        ctx.clearRect(
+            0,
+            0,
+            width,
+            height
+        );
+
+
+        for (
+            let i = 0;
+            i < nodes.length;
+            i++
+        ) {
+
+            const node =
+                nodes[i];
+
+
+            node.x += node.vx;
+            node.y += node.vy;
+
+
+            if (
+                node.x < 0 ||
+                node.x > width
+            ) {
+                node.vx *= -1;
+            }
+
+
+            if (
+                node.y < 0 ||
+                node.y > height
+            ) {
+                node.vy *= -1;
+            }
+
+
+            for (
+                let j = i + 1;
+                j < nodes.length;
+                j++
+            ) {
+
+                const other =
+                    nodes[j];
+
+
+                const dx =
+                    node.x - other.x;
+
+                const dy =
+                    node.y - other.y;
+
+                const distance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+
+                if (distance < 120) {
+
+                    ctx.beginPath();
+
+                    ctx.moveTo(
+                        node.x,
+                        node.y
+                    );
+
+                    ctx.lineTo(
+                        other.x,
+                        other.y
+                    );
+
+                    ctx.globalAlpha =
+                        1 -
+                        distance / 120;
+
+                    ctx.stroke();
+
+                }
+
+            }
+
+
+            ctx.globalAlpha = 1;
+
+            ctx.beginPath();
+
+            ctx.arc(
+                node.x,
+                node.y,
+                1.2,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+
+        }
+
+
+        requestAnimationFrame(
+            drawNeuralNetwork
+        );
+
     }
 
 
-    // Stop an already playing source if necessary.
+    resizeNeuralCanvas();
 
-    if (audioSourceNode) {
+    createNodes();
 
-      try {
-        audioSourceNode.stop();
-      } catch (e) {}
+    drawNeuralNetwork();
 
-      try {
-        audioSourceNode.disconnect();
-      } catch (e) {}
 
-      audioSourceNode =
-        null;
+    window.addEventListener(
+        'resize',
+        () => {
+
+            resizeNeuralCanvas();
+
+            createNodes();
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   PREVENT ACCIDENTAL PAGE ZOOM
+   ============================================================ */
+
+document.addEventListener(
+    'gesturestart',
+    event => {
+        event.preventDefault();
+    },
+    {
+        passive: false
+    }
+);
+
+document.addEventListener(
+    'gesturechange',
+    event => {
+        event.preventDefault();
+    },
+    {
+        passive: false
+    }
+);
+
+document.addEventListener(
+    'gestureend',
+    event => {
+        event.preventDefault();
+    },
+    {
+        passive: false
+    }
+);
+
+
+/* ============================================================
+   HAPTICS
+   ============================================================ */
+
+function haptic(pattern) {
+
+    if (
+        navigator.vibrate
+    ) {
+
+        try {
+            navigator.vibrate(pattern);
+        } catch (_) {}
+
+    }
+
+}
+
+
+/* ============================================================
+   SCANNER ELEMENT
+   ============================================================ */
+
+const scannerOrb =
+    $('scannerOrb');
+
+
+/* ============================================================
+   PROGRESS ELEMENT
+   ============================================================ */
+
+const scanProgressElement =
+    $('scanProgress');
+
+
+/* ============================================================
+   UPDATE VISUAL PROGRESS
+   ============================================================ */
+
+function updateScannerProgress(value) {
+
+    scanProgress =
+        Math.max(
+            0,
+            Math.min(
+                100,
+                value
+            )
+        );
+
+
+    /*
+     * Support common progress elements.
+     */
+
+    if (scanProgressElement) {
+
+        if (
+            'value' in
+            scanProgressElement
+        ) {
+
+            try {
+                scanProgressElement.value =
+                    scanProgress;
+            } catch (_) {}
+
+        }
+
+
+        scanProgressElement.style.setProperty(
+            '--progress',
+            scanProgress + '%'
+        );
+
+
+        scanProgressElement.textContent =
+            Math.round(
+                scanProgress
+            ) + '%';
+
     }
 
 
-    // Create a NEW source.
-    // AudioBufferSourceNode objects are single-use.
+    /*
+     * Support elements using data-progress.
+     */
 
-    const source =
-      ctx.createBufferSource();
+    if (scannerOrb) {
 
-    source.buffer =
-      decodedMainAudio;
+        scannerOrb.style.setProperty(
+            '--progress',
+            scanProgress + '%'
+        );
 
-    source.connect(
-      ctx.destination
+        scannerOrb.dataset.progress =
+            String(
+                Math.round(scanProgress)
+            );
+
+    }
+
+
+    /*
+     * If your original HTML has an element
+     * with id="progressText", update it.
+     */
+
+    const progressText =
+        $('progressText');
+
+    if (progressText) {
+
+        progressText.textContent =
+            Math.round(
+                scanProgress
+            ) + '%';
+
+    }
+
+}
+
+
+/* ============================================================
+   START VERIFICATION
+   ============================================================ */
+
+function startTouchVerification(event) {
+
+    if (event) {
+
+        try {
+            event.preventDefault();
+        } catch (_) {}
+
+    }
+
+
+    /*
+     * Ignore extra pointers.
+     */
+
+    if (verificationActive) {
+        return;
+    }
+
+
+    /*
+     * Record pointer.
+     */
+
+    if (
+        event &&
+        event.pointerId !== undefined
+    ) {
+
+        verificationPointerId =
+            event.pointerId;
+
+    } else {
+
+        verificationPointerId = null;
+
+    }
+
+
+    verificationActive = true;
+
+    verificationCompleted = false;
+
+    authorizationStarted = false;
+
+
+    /*
+     * Unlock Web Audio NOW from the actual
+     * user interaction.
+     *
+     * IMPORTANT:
+     * This does NOT start MainIntro.mp3.
+     */
+
+    unlockAudio();
+
+
+    /*
+     * Ensure the MP3 preparation is underway.
+     */
+
+    if (!mainAudioBuffer) {
+        prepareMainAudio();
+    }
+
+
+    /*
+     * Reset progress.
+     */
+
+    scanProgress = 0;
+
+    updateScannerProgress(0);
+
+
+    /*
+     * Haptic feedback.
+     */
+
+    haptic(15);
+
+
+    /*
+     * Cancel any old frame.
+     */
+
+    if (verificationFrame) {
+
+        cancelAnimationFrame(
+            verificationFrame
+        );
+
+        verificationFrame = null;
+
+    }
+
+
+    /*
+     * Exact start timestamp.
+     */
+
+    verificationStartTime =
+        performance.now();
+
+
+    /*
+     * Begin animation.
+     */
+
+    verificationFrame =
+        requestAnimationFrame(
+            verificationLoop
+        );
+
+}
+
+
+/* ============================================================
+   VERIFICATION LOOP
+   ------------------------------------------------------------
+   Runs for EXACTLY 2 seconds.
+   ============================================================ */
+
+function verificationLoop(now) {
+
+    /*
+     * If verification was cancelled,
+     * stop immediately.
+     */
+
+    if (!verificationActive) {
+
+        verificationFrame = null;
+
+        return;
+    }
+
+
+    /*
+     * Calculate exact elapsed time.
+     */
+
+    const elapsed =
+        now -
+        verificationStartTime;
+
+
+    let progress =
+        (
+            elapsed /
+            VERIFICATION_DURATION
+        ) * 100;
+
+
+    /*
+     * Clamp.
+     */
+
+    if (progress >= 100) {
+
+        progress = 100;
+
+        updateScannerProgress(100);
+
+        /*
+         * IMPORTANT:
+         *
+         * completeTouchVerification()
+         * sets verificationCompleted BEFORE
+         * starting audio.
+         *
+         * Therefore a subsequent pointerup
+         * cannot cancel the completion.
+         */
+
+        completeTouchVerification();
+
+        verificationFrame = null;
+
+        return;
+    }
+
+
+    if (progress < 0) {
+        progress = 0;
+    }
+
+
+    updateScannerProgress(
+        progress
     );
 
 
-    source.onended = () => {
+    verificationFrame =
+        requestAnimationFrame(
+            verificationLoop
+        );
 
-      console.log(
-        '[Audio] MainIntro.mp3 finished.'
-      );
+}
 
-      audioStarted = false;
 
-      try {
-        source.disconnect();
-      } catch (e) {}
+/* ============================================================
+   VERIFICATION COMPLETED
+   ============================================================ */
+
+function completeTouchVerification() {
+
+    /*
+     * Protection against double completion.
+     */
+
+    if (verificationCompleted) {
+        return;
+    }
+
+
+    /*
+     * THIS IS THE MOST IMPORTANT LINE OF THE SYSTEM.
+     *
+     * Mark completed FIRST.
+     */
+
+    verificationCompleted = true;
+
+    verificationActive = false;
+
+
+    /*
+     * Cancel animation.
+     */
+
+    if (verificationFrame) {
+
+        cancelAnimationFrame(
+            verificationFrame
+        );
+
+        verificationFrame = null;
+
+    }
+
+
+    /*
+     * Force exact 100%.
+     */
+
+    scanProgress = 100;
+
+    updateScannerProgress(100);
+
+
+    /*
+     * Haptic completion.
+     */
+
+    haptic([25, 30, 50]);
+
+
+    /* ========================================================
+       🔊 EXACT AUDIO START POINT
+
+       MainIntro.mp3 begins here.
+       It starts from 0:00.
+       Volume = 50%.
+
+       NOTHING starts before this point.
+       ======================================================== */
+
+    const audioStarted =
+        startMainIntroAt100Percent();
+
+
+    if (!audioStarted) {
+
+        /*
+         * Absolutely NO fallback sound.
+         *
+         * We only report the real problem.
+         */
+
+        console.error(
+            '[Reach Audio] MainIntro.mp3 could not start at 100%.'
+        );
+
+    }
+
+
+    /*
+     * Start the authorization/loading sequence
+     * AFTER the audio command.
+     */
+
+    beginAuthorizationSequence();
+
+}
+
+
+/* ============================================================
+   CANCEL VERIFICATION
+   ============================================================ */
+
+function cancelTouchVerification() {
+
+    /*
+     * If it already reached 100%,
+     * NEVER cancel it.
+     */
+
+    if (verificationCompleted) {
+        return;
+    }
+
+
+    if (!verificationActive) {
+        return;
+    }
+
+
+    verificationActive = false;
+
+
+    if (verificationFrame) {
+
+        cancelAnimationFrame(
+            verificationFrame
+        );
+
+        verificationFrame = null;
+
+    }
+
+
+    verificationPointerId = null;
+
+
+    /*
+     * Reset progress.
+     */
+
+    scanProgress = 0;
+
+    updateScannerProgress(0);
+
+
+    /*
+     * No audio needs to be stopped because
+     * audio never starts before 100%.
+     */
+
+    haptic(8);
+
+}
+
+
+/* ============================================================
+   POINTER EVENTS
+   ------------------------------------------------------------
+   IMPORTANT:
+   DO NOT ALSO ADD touchstart/mousedown listeners.
+   Pointer Events handles both.
+   ============================================================ */
+
+if (scannerOrb) {
+
+    /*
+     * Prevent browser gesture handling.
+     */
+
+    scannerOrb.style.touchAction =
+        'none';
+
+
+    scannerOrb.addEventListener(
+        'pointerdown',
+        startTouchVerification,
+        {
+            passive: false
+        }
+    );
+
+
+    scannerOrb.addEventListener(
+        'contextmenu',
+        event => {
+
+            event.preventDefault();
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   POINTER RELEASE
+   ============================================================ */
+
+window.addEventListener(
+    'pointerup',
+    event => {
+
+        /*
+         * If verification already completed,
+         * DO NOTHING.
+         *
+         * This is critical because the user's finger
+         * will normally still be touching the orb when
+         * the 2-second timer reaches 100%.
+         */
+
+        if (verificationCompleted) {
+            return;
+        }
+
+
+        if (
+            verificationPointerId !== null &&
+            event.pointerId !== verificationPointerId
+        ) {
+
+            return;
+        }
+
+
+        cancelTouchVerification();
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+/* ============================================================
+   POINTER CANCEL
+   ============================================================ */
+
+window.addEventListener(
+    'pointercancel',
+    event => {
+
+        if (verificationCompleted) {
+            return;
+        }
+
+
+        if (
+            verificationPointerId !== null &&
+            event.pointerId !== verificationPointerId
+        ) {
+
+            return;
+        }
+
+
+        cancelTouchVerification();
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+/* ============================================================
+   POINTER LEAVES WINDOW
+   ============================================================ */
+
+window.addEventListener(
+    'blur',
+    () => {
+
+        /*
+         * Do not cancel a completed verification.
+         */
+
+        if (verificationCompleted) {
+            return;
+        }
+
+
+        cancelTouchVerification();
+
+    }
+);
+
+
+/* ============================================================
+   AUTHORIZATION / LOADING SEQUENCE
+   ------------------------------------------------------------
+   This is the 5.5-second stage that occurs AFTER
+   MainIntro.mp3 starts.
+   ============================================================ */
+
+function beginAuthorizationSequence() {
+
+    if (authorizationStarted) {
+        return;
+    }
+
+    authorizationStarted = true;
+
+
+    /*
+     * Find common authorization elements.
+     */
+
+    const authorizationScreen =
+        $('authorizationScreen');
+
+    const authorizationProgress =
+        $('authorizationProgress');
+
+    const authorizationText =
+        $('authorizationText');
+
+
+    /*
+     * Show authorization screen if it exists.
+     */
+
+    if (authorizationScreen) {
+
+        authorizationScreen.classList.add(
+            'active'
+        );
+
+        authorizationScreen.style.display =
+            'flex';
+
+        authorizationScreen.style.opacity =
+            '1';
+
+    }
+
+
+    /*
+     * Reset progress.
+     */
+
+    if (authorizationProgress) {
+
+        authorizationProgress.style.width =
+            '0%';
+
+    }
+
+
+    if (authorizationText) {
+
+        authorizationText.textContent =
+            'AUTHORIZING...';
+
+    }
+
+
+    const startTime =
+        performance.now();
+
+
+    function authorizationLoop(now) {
+
+        const elapsed =
+            now -
+            startTime;
+
+
+        let progress =
+            (
+                elapsed /
+                AUTHORIZATION_DURATION
+            ) * 100;
+
+
+        if (progress > 100) {
+            progress = 100;
+        }
+
+
+        if (authorizationProgress) {
+
+            authorizationProgress.style.width =
+                progress + '%';
+
+        }
+
+
+        if (
+            progress >= 100
+        ) {
+
+            finishAuthorization();
+
+            return;
+        }
+
+
+        authorizationTimer =
+            requestAnimationFrame(
+                authorizationLoop
+            );
+
+    }
+
+
+    authorizationTimer =
+        requestAnimationFrame(
+            authorizationLoop
+        );
+
+}
+
+
+/* ============================================================
+   FINISH AUTHORIZATION
+   ============================================================ */
+
+function finishAuthorization() {
+
+    if (authorizationTimer) {
+
+        cancelAnimationFrame(
+            authorizationTimer
+        );
+
+        authorizationTimer = null;
+
+    }
+
+
+    const authorizationText =
+        $('authorizationText');
+
+    if (authorizationText) {
+
+        authorizationText.textContent =
+            'AUTHORIZED';
+
+    }
+
+
+    const authorizationScreen =
+        $('authorizationScreen');
+
+
+    /*
+     * Green completion burst.
+     */
+
+    if (authorizationScreen) {
+
+        authorizationScreen.classList.add(
+            'authorized'
+        );
+
+    }
+
+
+    /*
+     * If your original HTML has a dashboard,
+     * reveal it.
+     */
+
+    const dashboard =
+        $('dashboard');
+
+    if (dashboard) {
+
+        dashboard.classList.add(
+            'active'
+        );
+
+        dashboard.style.display =
+            'block';
+
+    }
+
+
+    /*
+     * Generic hidden-class handling.
+     */
+
+    const terminal =
+        $('terminal');
+
+    if (terminal) {
+
+        terminal.classList.add(
+            'connected'
+        );
+
+    }
+
+
+    console.log(
+        '[Reach] Authorization complete.'
+    );
+
+}
+
+
+/* ============================================================
+   OPTIONAL DEBUG STATUS
+   ------------------------------------------------------------ */
+
+window.getReachAudioStatus =
+    function () {
+
+        return {
+
+            audioContext:
+                audioContext
+                    ? audioContext.state
+                    : 'not-created',
+
+            audioUnlocked:
+                audioUnlocked,
+
+            audioPrepared:
+                audioPrepared,
+
+            audioBufferDuration:
+                mainAudioBuffer
+                    ? mainAudioBuffer.duration
+                    : 0,
+
+            audioPlaying:
+                audioPlaying,
+
+            volume:
+                MAIN_AUDIO_VOLUME,
+
+            verificationActive:
+                verificationActive,
+
+            verificationCompleted:
+                verificationCompleted,
+
+            progress:
+                scanProgress
+
+        };
 
     };
 
 
-    audioSourceNode =
-      source;
+/* ============================================================
+   FINAL STARTUP LOG
+   ============================================================ */
 
-
-    // PLAY IMMEDIATELY.
-    source.start(0);
-
-
-    audioStarted = true;
-
-    console.log(
-      '[Audio] 🔊 MainIntro.mp3 PLAYING NOW.'
-    );
-
-    return true;
-
-  } catch (error) {
-
-    console.error(
-      '[Audio] ❌ Actual MP3 playback failed:',
-      error
-    );
-
-    audioStarted = false;
-
-    return false;
-  }
-}
-
-
-// ------------------------------------------------------------
-// MASTER AUDIO START
-// ------------------------------------------------------------
-
-async function startMainIntroAudio() {
-
-  console.log(
-    '[Audio] ========================================'
-  );
-
-  console.log(
-    '[Audio] STARTING ACTUAL MainIntro.mp3'
-  );
-
-  console.log(
-    '[Audio] iOS:',
-    isIOS
-  );
-
-  console.log(
-    '[Audio] Android:',
-    isAndroid
-  );
-
-  console.log(
-    '[Audio] Context:',
-    audioContext
-      ? audioContext.state
-      : 'none'
-  );
-
-  console.log(
-    '[Audio] Unlocked:',
-    audioUnlocked
-  );
-
-
-  // Make absolutely sure the audio context is alive.
-
-  const ctx =
-    getAudioContext();
-
-  if (!ctx) {
-    console.error(
-      '[Audio] No audio context available.'
-    );
-    return false;
-  }
-
-
-  if (
-    ctx.state === 'suspended' ||
-    ctx.state === 'interrupted'
-  ) {
-
-    try {
-
-      await ctx.resume();
-
-    } catch (error) {
-
-      console.warn(
-        '[Audio] Final resume failed:',
-        error
-      );
-    }
-  }
-
-
-  // The ONLY audio source used here is MainIntro.mp3.
-
-  return await playDecodedMainAudio();
-}
-
-
-// ============================================================
-// PREPARE AUDIO AS EARLY AS POSSIBLE
-// ============================================================
-
-window.addEventListener(
-  'load',
-  () => {
-
-    console.log(
-      '[Audio] Page loaded. Preparing MainIntro.mp3...'
-    );
-
-    // Create context early.
-    getAudioContext();
-
-    // Begin downloading/decoding immediately.
-    // This DOES NOT play anything.
-
-    prepareMainAudio()
-      .then(() => {
-
-        console.log(
-          '[Audio] MainIntro.mp3 ready before verification.'
-        );
-
-      })
-      .catch(error => {
-
-        console.error(
-          '[Audio] Background MP3 preparation failed:',
-          error
-        );
-
-      });
-
-  }
+console.log(
+    '[Playcentrix Reach] Secure Terminal initialized.'
 );
 
-
-// ============================================================
-// RECOVER AUDIO WHEN PAGE RETURNS TO FOREGROUND
-// ============================================================
-
-document.addEventListener(
-  'visibilitychange',
-  async () => {
-
-    if (
-      document.visibilityState !== 'visible'
-    ) {
-      return;
-    }
-
-    if (!audioContext) {
-      return;
-    }
-
-    try {
-
-      if (
-        audioContext.state === 'suspended' ||
-        audioContext.state === 'interrupted'
-      ) {
-
-        await audioContext.resume();
-
-        console.log(
-          '[Audio] Recovered after page became visible.'
-        );
-      }
-
-    } catch (error) {
-
-      console.warn(
-        '[Audio] Visibility recovery failed:',
-        error
-      );
-    }
-
-  }
+console.log(
+    '[Playcentrix Reach] MainIntro.mp3 preload started.'
 );
 
-
-// ============================================================
-// DYNAMIC NEURAL CANVAS BG
-// ============================================================
-
-const canvas =
-  document.getElementById(
-    'neural-canvas'
-  );
-
-const ctx =
-  canvas.getContext('2d');
-
-let width;
-let height;
-let particles = [];
-
-
-function resizeCanvas() {
-
-  width =
-    canvas.width =
-      window.innerWidth;
-
-  height =
-    canvas.height =
-      window.innerHeight;
-
-
-  particles = [];
-
-
-  const count =
-    Math.floor(
-      (width * height) / 18000
-    );
-
-
-  for (
-    let i = 0;
-    i < count;
-    i++
-  ) {
-
-    particles.push({
-
-      x:
-        Math.random() *
-        width,
-
-      y:
-        Math.random() *
-        height,
-
-      vx:
-        (Math.random() - 0.5) *
-        0.4,
-
-      vy:
-        (Math.random() - 0.5) *
-        0.4,
-
-      radius:
-        Math.random() *
-        2 +
-        1
-
-    });
-  }
-}
-
-
-window.addEventListener(
-  'resize',
-  resizeCanvas
-);
-
-resizeCanvas();
-
-
-function animateCanvas() {
-
-  ctx.clearRect(
-    0,
-    0,
-    width,
-    height
-  );
-
-
-  ctx.fillStyle =
-    'rgba(0, 242, 254, 0.6)';
-
-  ctx.strokeStyle =
-    'rgba(0, 242, 254, 0.08)';
-
-
-  for (
-    let i = 0;
-    i < particles.length;
-    i++
-  ) {
-
-    let p =
-      particles[i];
-
-
-    p.x += p.vx;
-    p.y += p.vy;
-
-
-    if (
-      p.x < 0 ||
-      p.x > width
-    ) {
-      p.vx *= -1;
-    }
-
-
-    if (
-      p.y < 0 ||
-      p.y > height
-    ) {
-      p.vy *= -1;
-    }
-
-
-    ctx.beginPath();
-
-    ctx.arc(
-      p.x,
-      p.y,
-      p.radius,
-      0,
-      Math.PI * 2
-    );
-
-    ctx.fill();
-
-
-    for (
-      let j = i + 1;
-      j < particles.length;
-      j++
-    ) {
-
-      let p2 =
-        particles[j];
-
-
-      let dist =
-        Math.hypot(
-          p.x - p2.x,
-          p.y - p2.y
-        );
-
-
-      if (dist < 130) {
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-          p.x,
-          p.y
-        );
-
-        ctx.lineTo(
-          p2.x,
-          p2.y
-        );
-
-        ctx.stroke();
-      }
-    }
-  }
-
-
-  requestAnimationFrame(
-    animateCanvas
-  );
-}
-
-
-animateCanvas();
-
-
-// ============================================================
-// DISABLE ZOOM & DOUBLE TAP
-// ============================================================
-
-document.addEventListener(
-  'gesturestart',
-  e => e.preventDefault()
-);
-
-document.addEventListener(
-  'gesturechange',
-  e => e.preventDefault()
-);
-
-document.addEventListener(
-  'gestureend',
-  e => e.preventDefault()
-);
-
-
-let lastTouchEnd =
-  0;
-
-
-document.addEventListener(
-  'touchend',
-  function(e) {
-
-    const now =
-      Date.now();
-
-
-    if (
-      now - lastTouchEnd <= 300
-    ) {
-
-      e.preventDefault();
-    }
-
-
-    lastTouchEnd =
-      now;
-
-  },
-  false
-);
-
-
-// ============================================================
-// HAPTICS
-// ============================================================
-
-function hapticFeedback(
-  pattern = [15]
-) {
-
-  if (navigator.vibrate) {
-
-    try {
-
-      navigator.vibrate(
-        pattern
-      );
-
-    } catch(e) {}
-  }
-}
-
-
-// ============================================================
-// STAGE 1 SLIDER LOGIC
-// ============================================================
-
-const s1 =
-  document.getElementById('s1');
-
-const f1 =
-  document.getElementById('fill-1');
-
-const t1 =
-  document.getElementById('thumb-1');
-
-const v1 =
-  document.getElementById('s1-val');
-
-
-const s2 =
-  document.getElementById('s2');
-
-const f2 =
-  document.getElementById('fill-2');
-
-const t2 =
-  document.getElementById('thumb-2');
-
-const v2 =
-  document.getElementById('s2-val');
-
-
-const s3 =
-  document.getElementById('s3');
-
-const f3 =
-  document.getElementById('fill-3');
-
-const t3 =
-  document.getElementById('thumb-3');
-
-const v3 =
-  document.getElementById('s3-val');
-
-
-function updateSlider(
-  s,
-  f,
-  t,
-  v
-) {
-
-  const val =
-    s.value;
-
-
-  f.style.width =
-    val + '%';
-
-
-  t.style.left =
-    `calc(${val}% - ${val * 0.44}px)`;
-
-
-  v.textContent =
-    val + '%';
-
-
-  if (val == 100) {
-
-    t.style.background =
-      '#00ff88';
-
-    t.style.color =
-      '#000';
-
-    t.innerText =
-      '✓';
-
-    hapticFeedback([20]);
-
-  } else {
-
-    t.style.background =
-      '#ffffff';
-
-    t.style.color =
-      '#0f172a';
-
-    t.innerText =
-      '❯';
-  }
-
-
-  checkStage1Completion();
-}
-
-
-[
-  [s1, f1, t1, v1],
-  [s2, f2, t2, v2],
-  [s3, f3, t3, v3]
-].forEach(arr => {
-
-  arr[0].addEventListener(
-    'input',
-    () =>
-      updateSlider(
-        arr[0],
-        arr[1],
-        arr[2],
-        arr[3]
-      )
-  );
-
-});
-
-
-function checkStage1Completion() {
-
-  if (
-    s1.value == 100 &&
-    s2.value == 100 &&
-    s3.value == 100
-  ) {
-
-    hapticFeedback([
-      30,
-      50,
-      30
-    ]);
-
-
-    setTimeout(() => {
-
-      document
-        .getElementById('stage-1')
-        .classList
-        .remove('active');
-
-
-      document
-        .getElementById('stage-2')
-        .classList
-        .add('active');
-
-    }, 350);
-  }
-}
-
-
-// ============================================================
-// STAGE 2 TOUCH VERIFICATION
-// ============================================================
-
-const scannerOrb =
-  document.getElementById(
-    'scanner-orb'
-  );
-
-
-const progressCircle =
-  document.querySelector(
-    '.ring-progress-circle'
-  );
-
-
-const touchDesc =
-  document.getElementById(
-    'touch-status-desc'
-  );
-
-
-let scanProgress =
-  0;
-
-let progressInterval =
-  null;
-
-let verificationCompleted =
-  false;
-
-
-// ============================================================
-// START VERIFICATION
-// ============================================================
-
-function startTouchVerification(e) {
-
-  if (e) {
-    e.preventDefault();
-  }
-
-
-  // ==========================================================
-  // CRITICAL:
-  //
-  // This happens INSIDE the actual user touch.
-  //
-  // 1. Unlock Web Audio.
-  // 2. Begin fetching/decoding the ACTUAL MP3.
-  //
-  // Nothing synthesized is played.
-  // ==========================================================
-
-  unlockAudioImmediately();
-
-
-  prepareMainAudio()
-    .catch(error => {
-
-      console.error(
-        '[Audio] Could not prepare MainIntro.mp3 during verification:',
-        error
-      );
-
-    });
-
-
-  if (verificationCompleted) {
-    return;
-  }
-
-
-  scannerOrb.classList.add(
-    'active-scan'
-  );
-
-
-  touchDesc.textContent =
-    "VERIFYING DEVICE TOUCH";
-
-
-  touchDesc.className =
-    "text-sm font-medium text-cyan-400 mt-8 tracking-wide animate-pulse";
-
-
-  scanProgress =
-    0;
-
-
-  const maxOffset =
-    520;
-
-
-  hapticFeedback([20]);
-
-
-  clearInterval(
-    progressInterval
-  );
-
-
-  progressInterval =
-    setInterval(() => {
-
-      scanProgress += 2.5;
-
-
-      const offset =
-        maxOffset -
-        (
-          maxOffset *
-          (scanProgress / 100)
-        );
-
-
-      progressCircle.style.strokeDashoffset =
-        Math.max(
-          0,
-          offset
-        );
-
-
-      if (
-        scanProgress >= 100
-      ) {
-
-        clearInterval(
-          progressInterval
-        );
-
-
-        completeTouchVerification();
-      }
-
-    }, 50);
-}
-
-
-// ============================================================
-// STOP VERIFICATION
-// ============================================================
-
-function stopTouchVerification() {
-
-  if (
-    scanProgress < 100 &&
-    !verificationCompleted
-  ) {
-
-    clearInterval(
-      progressInterval
-    );
-
-
-    scannerOrb.classList.remove(
-      'active-scan'
-    );
-
-
-    progressCircle.style.strokeDashoffset =
-      520;
-
-
-    touchDesc.textContent =
-      "HOLD TO VERIFY";
-
-
-    touchDesc.className =
-      "text-sm font-medium text-gray-300 mt-8 tracking-wide";
-  }
-}
-
-
-// ============================================================
-// COMPLETE VERIFICATION
-// ============================================================
-
-async function completeTouchVerification() {
-
-  if (verificationCompleted) {
-    return;
-  }
-
-
-  verificationCompleted =
-    true;
-
-
-  clearInterval(
-    progressInterval
-  );
-
-
-  scannerOrb.classList.remove(
-    'active-scan'
-  );
-
-
-  scannerOrb.classList.add(
-    'success-scan'
-  );
-
-
-  touchDesc.textContent =
-    "VERIFICATION SUCCESSFUL";
-
-
-  touchDesc.className =
-    "text-sm font-bold text-emerald-400 mt-8 tracking-wide";
-
-
-  hapticFeedback([
-    40,
-    60,
-    100
-  ]);
-
-
-  // Purge 6776 code.
-  localStorage.removeItem(
-    '6776'
-  );
-
-
-  console.log(
-    '6776 code purged from local storage.'
-  );
-
-
-  // ==========================================================
-  // PLAY THE ACTUAL MP3 NOW.
-  //
-  // Because Web Audio was unlocked at touchstart and the
-  // MP3 was being decoded during verification, this avoids
-  // the iOS HTMLAudio NotAllowedError that you saw.
-  // ==========================================================
-
-  const audioResult =
-    await startMainIntroAudio();
-
-
-  if (!audioResult) {
-
-    console.error(
-      '[Audio] MainIntro.mp3 could not be started.'
-    );
-
-  }
-
-
-  // Transition to authorization screen.
-
-  setTimeout(() => {
-
-    document
-      .getElementById('stage-2')
-      .classList
-      .remove('active');
-
-
-    runAuthorizationSequence();
-
-  }, 600);
-}
-
-
-// ============================================================
-// TOUCH EVENTS
-// ============================================================
-
-scannerOrb.addEventListener(
-  'mousedown',
-  startTouchVerification
-);
-
-
-scannerOrb.addEventListener(
-  'touchstart',
-  startTouchVerification,
-  {
-    passive: false
-  }
-);
-
-
-window.addEventListener(
-  'mouseup',
-  stopTouchVerification
-);
-
-
-window.addEventListener(
-  'touchend',
-  stopTouchVerification
-);
-
-
-// ============================================================
-// STAGE 2.5 AUTHORIZATION
-// ============================================================
-
-function runAuthorizationSequence() {
-
-  const authOverlay =
-    document.getElementById(
-      'auth-overlay'
-    );
-
-
-  const authStatus =
-    document.getElementById(
-      'auth-status-text'
-    );
-
-
-  const authProgressBar =
-    document.getElementById(
-      'auth-progress-bar'
-    );
-
-
-  authOverlay.classList.add(
-    'active'
-  );
-
-
-  const messages = [
-
-    {
-      time: 0,
-      text: "Verifying User"
-    },
-
-    {
-      time: 1500,
-      text: "Rechecking Codes"
-    },
-
-    {
-      time: 3000,
-      text: "Creating Profile"
-    },
-
-    {
-      time: 4500,
-      text: "ACCESS GRANTED WELCOME"
-    }
-
-  ];
-
-
-  messages.forEach(m => {
-
-    setTimeout(() => {
-
-      authStatus.textContent =
-        m.text;
-
-      hapticFeedback([15]);
-
-    }, m.time);
-
-  });
-
-
-  let elapsed =
-    0;
-
-
-  const interval =
-    setInterval(() => {
-
-      elapsed += 50;
-
-
-      const pct =
-        Math.min(
-          100,
-          (elapsed / 5500) * 100
-        );
-
-
-      authProgressBar.style.width =
-        pct + '%';
-
-
-      if (
-        elapsed >= 5500
-      ) {
-
-        clearInterval(
-          interval
-        );
-
-
-        triggerGreenBurstAndDashboard();
-      }
-
-    }, 50);
-}
-
-
-// ============================================================
-// GREEN BURST + DASHBOARD
-// ============================================================
-
-function triggerGreenBurstAndDashboard() {
-
-  const authOverlay =
-    document.getElementById(
-      'auth-overlay'
-    );
-
-
-  const burst =
-    document.getElementById(
-      'green-burst-effect'
-    );
-
-
-  authOverlay.classList.remove(
-    'active'
-  );
-
-
-  burst.classList.add(
-    'burst'
-  );
-
-
-  hapticFeedback([
-    60,
-    120,
-    60
-  ]);
-
-
-  setTimeout(() => {
-
-    burst.classList.remove(
-      'burst'
-    );
-
-  }, 900);
-
-
-  document
-    .getElementById('stage-3')
-    .classList
-    .add('active');
-}
-
-
-// ============================================================
-// MODAL MANAGEMENT
-// ============================================================
-
-const modalBackdrop =
-  document.getElementById(
-    'modal-backdrop'
-  );
-
-
-const modalTitle =
-  document.getElementById(
-    'modal-title'
-  );
-
-
-const modalBody =
-  document.getElementById(
-    'modal-body'
-  );
-
-
-let currentOwnerName =
-  "Admin";
-
-
-let inputPasscode =
-  "";
-
-
-function openModal(action) {
-
-  modalBackdrop.classList.add(
-    'open'
-  );
-
-
-  modalBody.innerHTML =
-    "";
-
-
-  inputPasscode =
-    "";
-
-
-  switch(action) {
-
-    case "controlApps":
-
-      modalTitle.textContent =
-        "System Apps Control";
-
-
-      [
-        "Playcentrix Runtime",
-        "Playcentrix Toolbox",
-        "Playcentrix Bank",
-        "Playcentrix Servers"
-      ].forEach(app => {
-
-        const btn =
-          document.createElement(
-            'button'
-          );
-
-
-        btn.className =
-          "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors";
-
-
-        btn.textContent =
-          app;
-
-
-        btn.onclick =
-          () =>
-            showOnOff(app);
-
-
-        modalBody.appendChild(
-          btn
-        );
-
-      });
-
-      break;
-
-
-    case "changeOwner":
-
-      modalTitle.textContent =
-        "Transfer Ownership";
-
-
-      modalBody.innerHTML = `
-        <input
-          type="text"
-          id="newOwnerInput"
-          placeholder="Enter New Owner Name"
-          class="w-full py-3 px-4 rounded-xl bg-black/50 border border-white/20 text-center text-white focus:outline-none focus:border-cyan-400 font-medium mb-3"
-        >
-
-        <button
-          onclick="submitNewOwner()"
-          class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white shadow-lg"
-        >
-          Initiate Transfer
-        </button>
-      `;
-
-      break;
-
-
-    case "accessBackup":
-
-      modalTitle.textContent =
-        "Backup & Runtime";
-
-
-      [
-        "Initialize Backup Protocol",
-        "Engage Emergency Runtime"
-      ].forEach(opt => {
-
-        const btn =
-          document.createElement(
-            'button'
-          );
-
-
-        btn.className =
-          "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors mb-2";
-
-
-        btn.textContent =
-          opt;
-
-
-        btn.onclick =
-          () =>
-            promptFourDigit(opt);
-
-
-        modalBody.appendChild(
-          btn
-        );
-
-      });
-
-      break;
-
-
-    case "advancedStorage":
-
-      modalTitle.textContent =
-        "Storage Purge";
-
-
-      modalBody.innerHTML = `
-        <p class="text-xs text-gray-300 mb-4">
-          Purge all local cache entries and temporary overrides instantly.
-        </p>
-
-        <button
-          onclick="promptFourDigit('Purge Local Storage')"
-          class="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold"
-        >
-          Authorize Storage Purge
-        </button>
-      `;
-
-      break;
-
-
-    case "revealSecrets":
-
-      modalTitle.textContent =
-        "Classified Vault";
-
-
-      modalBody.innerHTML = `
-        <p class="text-xs text-gray-400 mb-4">
-          Enter 4-digit master passcode to decrypt secret vault.
-        </p>
-
-        <button
-          onclick="promptFourDigit('Reveal Secrets')"
-          class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
-        >
-          Enter Security Code
-        </button>
-      `;
-
-      break;
-
-
-    case "deletePX":
-
-      modalTitle.textContent =
-        "Delete Playcentrix";
-
-
-      modalBody.innerHTML = `
-        <p class="text-xs text-red-400 mb-3">
-          WARNING: Irreversible core system deletion protocol.
-        </p>
-
-        <input
-          type="text"
-          id="deleteConfirmInput"
-          placeholder="Type CONFIRM"
-          class="w-full py-3 px-4 rounded-xl bg-black/60 border border-red-500/30 text-center text-red-400 focus:outline-none focus:border-red-500 font-bold uppercase mb-3"
-        >
-
-        <button
-          onclick="submitDelete()"
-          class="w-full py-3 rounded-xl bg-red-600 text-white font-bold shadow-lg shadow-red-600/30"
-        >
-          VERIFY TERMINATION
-        </button>
-      `;
-
-      break;
-  }
-}
-
-
-function closeModal() {
-
-  modalBackdrop.classList.remove(
-    'open'
-  );
-}
-
-
-function showOnOff(appName) {
-
-  modalBody.innerHTML = `
-
-    <p class="text-xs text-cyan-400 font-mono mb-3">
-      TARGET: ${appName}
-    </p>
-
-    <button
-      onclick="promptFourDigit('${appName} ACTIVATE')"
-      class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold mb-2"
-    >
-      ACTIVATE
-    </button>
-
-    <button
-      onclick="promptFourDigit('${appName} DEACTIVATE')"
-      class="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-bold"
-    >
-      DEACTIVATE
-    </button>
-
-  `;
-}
-
-
-function submitNewOwner() {
-
-  const input =
-    document.getElementById(
-      'newOwnerInput'
-    );
-
-
-  const val =
-    input
-      ? input.value.trim()
-      : "";
-
-
-  if (!val) return;
-
-
-  currentOwnerName =
-    val;
-
-
-  promptFourDigit(
-    "Transfer Ownership to " +
-    val
-  );
-}
-
-
-function submitDelete() {
-
-  const input =
-    document.getElementById(
-      'deleteConfirmInput'
-    );
-
-
-  const val =
-    input
-      ? input.value.trim()
-      : "";
-
-
-  if (
-    val.toUpperCase() ===
-    "CONFIRM"
-  ) {
-
-    promptFourDigit(
-      "Delete Playcentrix Core"
-    );
-
-  } else {
-
-    alert(
-      "Please type 'CONFIRM' to proceed."
-    );
-  }
-}
-
-
-// ============================================================
-// 4-DIGIT SECURITY NUMPAD
-// ============================================================
-
-function promptFourDigit(
-  actionTitle
-) {
-
-  inputPasscode =
-    "";
-
-
-  modalTitle.textContent =
-    "Security Code Required";
-
-
-  modalBody.innerHTML = `
-
-    <div class="text-xs text-gray-400 mb-2">
-      ${actionTitle}
-    </div>
-
-    <div
-      id="passcode-dots"
-      class="flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400"
-    >
-      ••••
-    </div>
-
-    <div class="grid grid-cols-3 gap-2 mt-4">
-
-      ${[
-        1,2,3,4,5,6,7,8,9
-      ].map(n => `
-        <button
-          class="numpad-btn"
-          onclick="pressDigit('${n}', '${actionTitle}')"
-        >
-          ${n}
-        </button>
-      `).join('')}
-
-      <button
-        class="numpad-btn text-gray-400 text-sm"
-        onclick="clearDigit()"
-      >
-        CLEAR
-      </button>
-
-      <button
-        class="numpad-btn"
-        onclick="pressDigit('0', '${actionTitle}')"
-      >
-        0
-      </button>
-
-      <button
-        class="numpad-btn text-cyan-400 text-sm"
-        onclick="verifyPasscode('${actionTitle}')"
-      >
-        OK
-      </button>
-
-    </div>
-  `;
-}
-
-
-function pressDigit(
-  num,
-  actionTitle
-) {
-
-  if (
-    inputPasscode.length < 4
-  ) {
-
-    inputPasscode +=
-      num;
-
-
-    hapticFeedback([10]);
-
-
-    updatePasscodeDots();
-
-
-    if (
-      inputPasscode.length === 4
-    ) {
-
-      setTimeout(
-        () =>
-          verifyPasscode(
-            actionTitle
-          ),
-        150
-      );
-    }
-  }
-}
-
-
-function clearDigit() {
-
-  inputPasscode =
-    "";
-
-
-  updatePasscodeDots();
-}
-
-
-function updatePasscodeDots() {
-
-  const dotsContainer =
-    document.getElementById(
-      'passcode-dots'
-    );
-
-
-  if (!dotsContainer) {
-    return;
-  }
-
-
-  let display =
-    "";
-
-
-  for (
-    let i = 0;
-    i < 4;
-    i++
-  ) {
-
-    display +=
-      i < inputPasscode.length
-        ? "● "
-        : "○ ";
-  }
-
-
-  dotsContainer.textContent =
-    display.trim();
-}
-
-
-function verifyPasscode(
-  actionTitle
-) {
-
-  if (
-    inputPasscode ===
-    "4321"
-  ) {
-
-    hapticFeedback([
-      40,
-      80
-    ]);
-
-
-    sendTelegramNotice(
-      `✅ Success: ${actionTitle}`
-    );
-
-
-    if (
-      actionTitle ===
-      "Reveal Secrets"
-    ) {
-
-      modalTitle.textContent =
-        "Classified Secrets";
-
-
-      modalBody.innerHTML = `
-
-        <div class="py-4 text-center space-y-3">
-
-          <div class="text-4xl animate-bounce">
-            🌿👀🌿
-          </div>
-
-          <h4 class="text-lg font-bold text-emerald-400">
-            The Epicstream Destruction Plan
-          </h4>
-
-          <p class="text-xs text-gray-300 leading-relaxed px-2">
-
-            Files: All Documents and Files with Proof are stord in PCX Vault!
-
-            <br><br>
-
-            We have collected all the required files of epicstream and accured epicstream-alike and available usernames and domains where available and further plans to destory epicstream asap.
-
-          </p>
-
-          <div class="text-[10px] text-cyan-400 font-mono pt-2">
-            [ Level 4 Secrets Remapped ]
-          </div>
-
-        </div>
-      `;
-
-
-    } else if (
-      actionTitle.includes(
-        "Purge Local Storage"
-      )
-    ) {
-
-      localStorage.clear();
-      sessionStorage.clear();
-
-
-      modalTitle.textContent =
-        "Storage Purged";
-
-
-      modalBody.innerHTML = `
-        <p class="text-emerald-400 text-sm py-4">
-          All cached items and local variables cleared successfully.
-        </p>
-      `;
-
-
-      setTimeout(
-        closeModal,
-        1500
-      );
-
-
-    } else {
-
-      modalTitle.textContent =
-        "Action Authorized";
-
-
-      modalBody.innerHTML = `
-        <p class="text-emerald-400 text-sm py-4">
-          Protocol [${actionTitle}] executed successfully.
-        </p>
-      `;
-
-
-      setTimeout(
-        closeModal,
-        1400
-      );
-    }
-
-
-  } else {
-
-    hapticFeedback([
-      100,
-      50,
-      100
-    ]);
-
-
-    sendTelegramNotice(
-      `❌ Denied: ${actionTitle} Attempted`
-    );
-
-
-    const dotsContainer =
-      document.getElementById(
-        'passcode-dots'
-      );
-
-
-    if (dotsContainer) {
-
-      dotsContainer.textContent =
-        "DENIED";
-
-
-      dotsContainer.className =
-        "text-red-500 font-bold text-xl py-2";
-    }
-
-
-    setTimeout(() => {
-
-      inputPasscode =
-        "";
-
-
-      updatePasscodeDots();
-
-
-      if (dotsContainer) {
-
-        dotsContainer.className =
-          "flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400";
-      }
-
-    }, 1200);
-  }
-}
-
-
-// ============================================================
-// TELEGRAM TELEMETRY
-// ============================================================
-//
-// IMPORTANT:
-// Do NOT put a real Telegram bot token in client-side HTML.
-// Anyone can see it in DevTools/source.
-//
-// Put your existing server-side Telegram implementation here.
-// ============================================================
-
-function sendTelegramNotice(message) {
-
-  console.log(
-    '[Telemetry]',
-    message
-  );
-
-  // Intentionally not embedding the bot token in this source.
-  //
-  // Recommended:
-  // fetch('/api/telegram', {
-  //   method: 'POST',
-  //   headers: {
-  //     'Content-Type': 'application/json'
-  //   },
-  //   body: JSON.stringify({ message })
-  // });
-}
 </script>
 </body>
 </html>
