@@ -602,41 +602,380 @@ html, body {
 
 <script>
 // PRELOAD AUDIO IMMEDIATELY ON LOAD
-const introAudio = new Audio('MainIntro.mp3');
+const introAudio = new Audio('./MainIntro.mp3');
 introAudio.preload = 'auto';
 introAudio.loop = false;
+introAudio.playsInline = true;
 
-// Web Audio API Fallback Synth if mp3 fails or doesn't exist locally
 let audioCtx = null;
-function playAudioFallback() {
+let audioUnlocked = false;
+let audioPlaying = false;
+
+// ============================================================
+// ROBUST AUDIO ERROR HANDLING
+// ============================================================
+
+introAudio.addEventListener('loadstart', () => {
+  console.log('[Audio] Loading MainIntro.mp3...');
+});
+
+introAudio.addEventListener('loadedmetadata', () => {
+  console.log('[Audio] Metadata loaded. Duration:', introAudio.duration);
+});
+
+introAudio.addEventListener('canplay', () => {
+  console.log('[Audio] MainIntro.mp3 can play.');
+});
+
+introAudio.addEventListener('canplaythrough', () => {
+  console.log('[Audio] MainIntro.mp3 can play through.');
+});
+
+introAudio.addEventListener('playing', () => {
+  audioPlaying = true;
+  console.log('[Audio] MainIntro.mp3 PLAYING.');
+});
+
+introAudio.addEventListener('pause', () => {
+  audioPlaying = false;
+});
+
+introAudio.addEventListener('ended', () => {
+  audioPlaying = false;
+  console.log('[Audio] MainIntro.mp3 finished.');
+});
+
+introAudio.addEventListener('error', () => {
+  const error = introAudio.error;
+
+  if (!error) {
+    console.error('[Audio] Unknown audio error.');
+    return;
+  }
+
+  const errors = {
+    1: 'MEDIA_ERR_ABORTED - Audio loading was aborted.',
+    2: 'MEDIA_ERR_NETWORK - Network error while loading audio.',
+    3: 'MEDIA_ERR_DECODE - Browser could not decode the MP3.',
+    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Audio file is missing or unsupported.'
+  };
+
+  console.error(
+    '[Audio]',
+    errors[error.code] || 'Unknown media error.',
+    error
+  );
+});
+
+
+// ============================================================
+// CREATE WEB AUDIO CONTEXT
+// ============================================================
+
+function createAudioContext() {
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    audioCtx = new AudioContext();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 1.5);
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 3.0);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 3.0);
-  } catch(e) {
-    console.log("Audio fallback error:", e);
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+    if (!AudioContextClass) {
+      console.warn('[Audio] Web Audio API unavailable.');
+      return null;
+    }
+
+    if (!audioCtx) {
+      audioCtx = new AudioContextClass();
+
+      console.log(
+        '[Audio] AudioContext created:',
+        audioCtx.state
+      );
+    }
+
+    return audioCtx;
+
+  } catch (error) {
+    console.error(
+      '[Audio] AudioContext creation failed:',
+      error
+    );
+
+    return null;
   }
 }
 
-function startMainIntroAudio() {
-  introAudio.play().catch(err => {
-    console.log("MainIntro.mp3 auto-play notice (playing fallback):", err);
-    playAudioFallback();
-  });
+
+// ============================================================
+// IOS / SAFARI AUDIO UNLOCK
+// Called directly from the user's touch event.
+// ============================================================
+
+function unlockAudio() {
+  try {
+    const ctx = createAudioContext();
+
+    if (!ctx) return false;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+        .then(() => {
+          console.log('[Audio] AudioContext resumed.');
+        })
+        .catch(error => {
+          console.error(
+            '[Audio] AudioContext resume failed:',
+            error
+          );
+        });
+    }
+
+    // Silent Web Audio buffer used to unlock iOS audio.
+    const buffer = ctx.createBuffer(
+      1,
+      1,
+      22050
+    );
+
+    const source = ctx.createBufferSource();
+
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+
+    audioUnlocked = true;
+
+    console.log('[Audio] iOS audio unlocked.');
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      '[Audio] iOS audio unlock failed:',
+      error
+    );
+
+    audioUnlocked = false;
+
+    return false;
+  }
 }
 
+
+// ============================================================
+// PLAY ACTUAL MP3
+// ============================================================
+
+async function playMainIntroMP3() {
+  try {
+    console.log('[Audio] Attempting MainIntro.mp3...');
+
+    introAudio.muted = false;
+    introAudio.volume = 1.0;
+
+    try {
+      introAudio.currentTime = 0;
+    } catch (error) {
+      console.warn(
+        '[Audio] Could not reset audio position:',
+        error
+      );
+    }
+
+    const playPromise = introAudio.play();
+
+    if (playPromise !== undefined) {
+      await playPromise;
+    }
+
+    audioPlaying = true;
+
+    console.log(
+      '[Audio] MainIntro.mp3 playback started successfully.'
+    );
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      '[Audio] MainIntro.mp3 playback failed:',
+      error
+    );
+
+    if (error && error.name) {
+      console.error(
+        '[Audio] Error name:',
+        error.name
+      );
+    }
+
+    if (error && error.message) {
+      console.error(
+        '[Audio] Error message:',
+        error.message
+      );
+    }
+
+    return false;
+  }
+}
+
+
+// ============================================================
+// WEB AUDIO FALLBACK
+// ============================================================
+
+async function playAudioFallback() {
+  try {
+    const ctx = createAudioContext();
+
+    if (!ctx) {
+      console.error(
+        '[Audio] Web Audio fallback unavailable.'
+      );
+
+      return false;
+    }
+
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch (error) {
+        console.error(
+          '[Audio] Could not resume fallback AudioContext:',
+          error
+        );
+
+        return false;
+      }
+    }
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+
+    osc.frequency.setValueAtTime(
+      440,
+      ctx.currentTime
+    );
+
+    osc.frequency.exponentialRampToValueAtTime(
+      880,
+      ctx.currentTime + 1.5
+    );
+
+    gain.gain.setValueAtTime(
+      0.15,
+      ctx.currentTime
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.01,
+      ctx.currentTime + 3
+    );
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 3);
+
+    console.log(
+      '[Audio] Web Audio fallback started.'
+    );
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      '[Audio] Web Audio fallback failed:',
+      error
+    );
+
+    return false;
+  }
+}
+
+
+// ============================================================
+// MAIN AUDIO START FUNCTION
+// ============================================================
+
+async function startMainIntroAudio() {
+  console.log(
+    '[Audio] ========================================'
+  );
+
+  console.log(
+    '[Audio] Starting MainIntro audio system...'
+  );
+
+  console.log(
+    '[Audio] iPhone/iPad:',
+    /iPhone|iPad|iPod/i.test(navigator.userAgent)
+  );
+
+  console.log(
+    '[Audio] Audio unlocked:',
+    audioUnlocked
+  );
+
+  console.log(
+    '[Audio] AudioContext:',
+    audioCtx ? audioCtx.state : 'not created'
+  );
+
+  console.log(
+    '[Audio] MP3 readyState:',
+    introAudio.readyState
+  );
+
+  console.log(
+    '[Audio] MP3 source:',
+    introAudio.currentSrc
+  );
+
+
+  // First attempt: actual MainIntro.mp3
+  const mp3Success = await playMainIntroMP3();
+
+  if (mp3Success) {
+    console.log(
+      '[Audio] SUCCESS: MainIntro.mp3 is playing.'
+    );
+
+    return true;
+  }
+
+
+  // Second attempt: Web Audio fallback
+  console.warn(
+    '[Audio] MP3 failed. Trying Web Audio fallback...'
+  );
+
+  const fallbackSuccess = await playAudioFallback();
+
+  if (fallbackSuccess) {
+    console.log(
+      '[Audio] SUCCESS: Web Audio fallback is playing.'
+    );
+
+    return true;
+  }
+
+
+  console.error(
+    '[Audio] ❌ ALL AUDIO METHODS FAILED.'
+  );
+
+  return false;
+}
+
+
+// ============================================================
 // DYNAMIC NEURAL CANVAS BG
+// ============================================================
+
 const canvas = document.getElementById('neural-canvas');
 const ctx = canvas.getContext('2d');
 let width, height, particles = [];
@@ -645,7 +984,11 @@ function resizeCanvas() {
   width = canvas.width = window.innerWidth;
   height = canvas.height = window.innerHeight;
   particles = [];
-  const count = Math.floor((width * height) / 18000);
+
+  const count = Math.floor(
+    (width * height) / 18000
+  );
+
   for (let i = 0; i < count; i++) {
     particles.push({
       x: Math.random() * width,
@@ -656,415 +999,1165 @@ function resizeCanvas() {
     });
   }
 }
+
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 function animateCanvas() {
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(0, 242, 254, 0.6)';
-  ctx.strokeStyle = 'rgba(0, 242, 254, 0.08)';
+  ctx.clearRect(
+    0,
+    0,
+    width,
+    height
+  );
+
+  ctx.fillStyle =
+    'rgba(0, 242, 254, 0.6)';
+
+  ctx.strokeStyle =
+    'rgba(0, 242, 254, 0.08)';
 
   for (let i = 0; i < particles.length; i++) {
+
     let p = particles[i];
+
     p.x += p.vx;
     p.y += p.vy;
-    if (p.x < 0 || p.x > width) p.vx *= -1;
-    if (p.y < 0 || p.y > height) p.vy *= -1;
+
+    if (p.x < 0 || p.x > width) {
+      p.vx *= -1;
+    }
+
+    if (p.y < 0 || p.y > height) {
+      p.vy *= -1;
+    }
 
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+
+    ctx.arc(
+      p.x,
+      p.y,
+      p.radius,
+      0,
+      Math.PI * 2
+    );
+
     ctx.fill();
 
-    for (let j = i + 1; j < particles.length; j++) {
+    for (
+      let j = i + 1;
+      j < particles.length;
+      j++
+    ) {
+
       let p2 = particles[j];
-      let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+
+      let dist = Math.hypot(
+        p.x - p2.x,
+        p.y - p2.y
+      );
+
       if (dist < 130) {
+
         ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p2.x, p2.y);
+
+        ctx.moveTo(
+          p.x,
+          p.y
+        );
+
+        ctx.lineTo(
+          p2.x,
+          p2.y
+        );
+
         ctx.stroke();
       }
     }
   }
-  requestAnimationFrame(animateCanvas);
+
+  requestAnimationFrame(
+    animateCanvas
+  );
 }
+
 animateCanvas();
 
-// DISABLE ZOOM & ACCIDENTAL DOUBLE TAP
-document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
-document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
-document.addEventListener('gestureend', function(e) { e.preventDefault(); });
 
-let lastTouchEnd = 0;
-document.addEventListener('touchend', function(e) {
-  const now = Date.now();
-  if (now - lastTouchEnd <= 300) {
+// ============================================================
+// DISABLE ZOOM & ACCIDENTAL DOUBLE TAP
+// ============================================================
+
+document.addEventListener(
+  'gesturestart',
+  function(e) {
     e.preventDefault();
   }
-  lastTouchEnd = now;
-}, false);
+);
+
+document.addEventListener(
+  'gesturechange',
+  function(e) {
+    e.preventDefault();
+  }
+);
+
+document.addEventListener(
+  'gestureend',
+  function(e) {
+    e.preventDefault();
+  }
+);
+
+let lastTouchEnd = 0;
+
+document.addEventListener(
+  'touchend',
+  function(e) {
+
+    const now = Date.now();
+
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+
+    lastTouchEnd = now;
+
+  },
+  false
+);
+
 
 function hapticFeedback(pattern = [15]) {
+
   if (navigator.vibrate) {
-    try { navigator.vibrate(pattern); } catch(e){}
+
+    try {
+      navigator.vibrate(pattern);
+    } catch(e) {}
+
   }
 }
 
+
+// ============================================================
 // STAGE 1 SLIDER LOGIC
-const s1 = document.getElementById('s1'), f1 = document.getElementById('fill-1'), t1 = document.getElementById('thumb-1'), v1 = document.getElementById('s1-val');
-const s2 = document.getElementById('s2'), f2 = document.getElementById('fill-2'), t2 = document.getElementById('thumb-2'), v2 = document.getElementById('s2-val');
-const s3 = document.getElementById('s3'), f3 = document.getElementById('fill-3'), t3 = document.getElementById('thumb-3'), v3 = document.getElementById('s3-val');
+// ============================================================
+
+const s1 = document.getElementById('s1');
+const f1 = document.getElementById('fill-1');
+const t1 = document.getElementById('thumb-1');
+const v1 = document.getElementById('s1-val');
+
+const s2 = document.getElementById('s2');
+const f2 = document.getElementById('fill-2');
+const t2 = document.getElementById('thumb-2');
+const v2 = document.getElementById('s2-val');
+
+const s3 = document.getElementById('s3');
+const f3 = document.getElementById('fill-3');
+const t3 = document.getElementById('thumb-3');
+const v3 = document.getElementById('s3-val');
+
 
 function updateSlider(s, f, t, v) {
+
   const val = s.value;
-  f.style.width = val + '%';
-  t.style.left = `calc(${val}% - ${val * 0.44}px)`;
-  v.textContent = val + '%';
+
+  f.style.width =
+    val + '%';
+
+  t.style.left =
+    `calc(${val}% - ${val * 0.44}px)`;
+
+  v.textContent =
+    val + '%';
+
 
   if (val == 100) {
-    t.style.background = '#00ff88';
-    t.style.color = '#000';
-    t.innerText = '✓';
+
+    t.style.background =
+      '#00ff88';
+
+    t.style.color =
+      '#000';
+
+    t.innerText =
+      '✓';
+
     hapticFeedback([20]);
+
   } else {
-    t.style.background = '#ffffff';
-    t.style.color = '#0f172a';
-    t.innerText = '❯';
+
+    t.style.background =
+      '#ffffff';
+
+    t.style.color =
+      '#0f172a';
+
+    t.innerText =
+      '❯';
   }
+
   checkStage1Completion();
 }
 
-[ [s1,f1,t1,v1], [s2,f2,t2,v2], [s3,f3,t3,v3] ].forEach(arr => {
-  arr[0].addEventListener('input', () => updateSlider(arr[0], arr[1], arr[2], arr[3]));
+
+[
+  [s1, f1, t1, v1],
+  [s2, f2, t2, v2],
+  [s3, f3, t3, v3]
+].forEach(arr => {
+
+  arr[0].addEventListener(
+    'input',
+    () => updateSlider(
+      arr[0],
+      arr[1],
+      arr[2],
+      arr[3]
+    )
+  );
+
 });
 
+
 function checkStage1Completion() {
-  if (s1.value == 100 && s2.value == 100 && s3.value == 100) {
-    hapticFeedback([30, 50, 30]);
+
+  if (
+    s1.value == 100 &&
+    s2.value == 100 &&
+    s3.value == 100
+  ) {
+
+    hapticFeedback([
+      30,
+      50,
+      30
+    ]);
+
     setTimeout(() => {
-      document.getElementById('stage-1').classList.remove('active');
-      document.getElementById('stage-2').classList.add('active');
+
+      document
+        .getElementById('stage-1')
+        .classList
+        .remove('active');
+
+      document
+        .getElementById('stage-2')
+        .classList
+        .add('active');
+
     }, 350);
   }
 }
 
+
+// ============================================================
 // STAGE 2 SCANNER LOGIC
-const scannerOrb = document.getElementById('scanner-orb');
-const progressCircle = document.querySelector('.ring-progress-circle');
-const touchDesc = document.getElementById('touch-status-desc');
+// ============================================================
+
+const scannerOrb =
+  document.getElementById(
+    'scanner-orb'
+  );
+
+const progressCircle =
+  document.querySelector(
+    '.ring-progress-circle'
+  );
+
+const touchDesc =
+  document.getElementById(
+    'touch-status-desc'
+  );
+
 let scanTimer = null;
 let scanProgress = 0;
 let progressInterval = null;
 
+
+// ============================================================
+// IMPORTANT AUDIO CHANGE:
+// unlockAudio() is called immediately while the user is
+// physically touching the screen.
+// ============================================================
+
 function startTouchVerification(e) {
-  if (e) e.preventDefault();
-  scannerOrb.classList.add('active-scan');
-  touchDesc.textContent = "VERIFYING DEVICE TOUCH";
-  touchDesc.className = "text-sm font-medium text-cyan-400 mt-8 tracking-wide animate-pulse";
-  
+
+  if (e) {
+    e.preventDefault();
+  }
+
+
+  // IMPORTANT FOR iOS SAFARI
+  unlockAudio();
+
+
+  scannerOrb.classList.add(
+    'active-scan'
+  );
+
+  touchDesc.textContent =
+    "VERIFYING DEVICE TOUCH";
+
+  touchDesc.className =
+    "text-sm font-medium text-cyan-400 mt-8 tracking-wide animate-pulse";
+
+
   scanProgress = 0;
+
   const maxOffset = 520;
-  
+
   hapticFeedback([20]);
 
+
   progressInterval = setInterval(() => {
-    scanProgress += 2.5; // reaches 100% in 2000ms
-    const offset = maxOffset - (maxOffset * (scanProgress / 100));
-    progressCircle.style.strokeDashoffset = Math.max(0, offset);
+
+    scanProgress += 2.5;
+
+    const offset =
+      maxOffset -
+      (
+        maxOffset *
+        (scanProgress / 100)
+      );
+
+    progressCircle.style.strokeDashoffset =
+      Math.max(
+        0,
+        offset
+      );
+
 
     if (scanProgress >= 100) {
-      clearInterval(progressInterval);
+
+      clearInterval(
+        progressInterval
+      );
+
       completeTouchVerification();
     }
+
   }, 50);
 }
 
+
 function stopTouchVerification() {
+
   if (scanProgress < 100) {
-    clearInterval(progressInterval);
-    scannerOrb.classList.remove('active-scan');
-    progressCircle.style.strokeDashoffset = 520;
-    touchDesc.textContent = "HOLD TO VERIFY";
-    touchDesc.className = "text-sm font-medium text-gray-300 mt-8 tracking-wide";
+
+    clearInterval(
+      progressInterval
+    );
+
+    scannerOrb.classList.remove(
+      'active-scan'
+    );
+
+    progressCircle.style.strokeDashoffset =
+      520;
+
+    touchDesc.textContent =
+      "HOLD TO VERIFY";
+
+    touchDesc.className =
+      "text-sm font-medium text-gray-300 mt-8 tracking-wide";
   }
 }
 
+
 function completeTouchVerification() {
-  scannerOrb.classList.remove('active-scan');
-  scannerOrb.classList.add('success-scan');
-  touchDesc.textContent = "VERIFICATION SUCCESSFUL";
-  touchDesc.className = "text-sm font-bold text-emerald-400 mt-8 tracking-wide";
-  
-  hapticFeedback([40, 60, 100]);
 
-  // Purge 6776 code from local storage as per spec
-  localStorage.removeItem('6776');
-  console.log("6776 code purged from local storage.");
+  scannerOrb.classList.remove(
+    'active-scan'
+  );
 
-  // IMMEDIATE AUDIO TRIGGER inside touch gesture context!
+  scannerOrb.classList.add(
+    'success-scan'
+  );
+
+  touchDesc.textContent =
+    "VERIFICATION SUCCESSFUL";
+
+  touchDesc.className =
+    "text-sm font-bold text-emerald-400 mt-8 tracking-wide";
+
+
+  hapticFeedback([
+    40,
+    60,
+    100
+  ]);
+
+
+  // Purge 6776 code from local storage
+  localStorage.removeItem(
+    '6776'
+  );
+
+  console.log(
+    "6776 code purged from local storage."
+  );
+
+
+  // PLAY INTRO AUDIO
+  // Audio system was already unlocked during touchstart.
   startMainIntroAudio();
 
-  // Transition to Stage 2.5 (Pitch Black Authorization for 5.5s)
+
+  // Transition to Stage 2.5
   setTimeout(() => {
-    document.getElementById('stage-2').classList.remove('active');
+
+    document
+      .getElementById('stage-2')
+      .classList
+      .remove('active');
+
     runAuthorizationSequence();
+
   }, 600);
 }
 
-scannerOrb.addEventListener('mousedown', startTouchVerification);
-scannerOrb.addEventListener('touchstart', startTouchVerification, {passive: false});
-window.addEventListener('mouseup', stopTouchVerification);
-window.addEventListener('touchend', stopTouchVerification);
 
-// STAGE 2.5: AUTHORIZATION PRELOADER (5.5 Seconds)
+scannerOrb.addEventListener(
+  'mousedown',
+  startTouchVerification
+);
+
+scannerOrb.addEventListener(
+  'touchstart',
+  startTouchVerification,
+  {
+    passive: false
+  }
+);
+
+window.addEventListener(
+  'mouseup',
+  stopTouchVerification
+);
+
+window.addEventListener(
+  'touchend',
+  stopTouchVerification
+);
+
+
+// ============================================================
+// STAGE 2.5: AUTHORIZATION PRELOADER
+// ============================================================
+
 function runAuthorizationSequence() {
-  const authOverlay = document.getElementById('auth-overlay');
-  const authStatus = document.getElementById('auth-status-text');
-  const authProgressBar = document.getElementById('auth-progress-bar');
-  
-  authOverlay.classList.add('active');
+
+  const authOverlay =
+    document.getElementById(
+      'auth-overlay'
+    );
+
+  const authStatus =
+    document.getElementById(
+      'auth-status-text'
+    );
+
+  const authProgressBar =
+    document.getElementById(
+      'auth-progress-bar'
+    );
+
+
+  authOverlay.classList.add(
+    'active'
+  );
+
 
   const messages = [
-    { time: 0, text: "Verifying User" },
-    { time: 1500, text: "Rechecking Codes" },
-    { time: 3000, text: "Creating Profile" },
-    { time: 4500, text: "ACCESS GRANTED WELCOME" }
+
+    {
+      time: 0,
+      text: "Verifying User"
+    },
+
+    {
+      time: 1500,
+      text: "Rechecking Codes"
+    },
+
+    {
+      time: 3000,
+      text: "Creating Profile"
+    },
+
+    {
+      time: 4500,
+      text: "ACCESS GRANTED WELCOME"
+    }
+
   ];
 
+
   messages.forEach(m => {
+
     setTimeout(() => {
-      authStatus.textContent = m.text;
+
+      authStatus.textContent =
+        m.text;
+
       hapticFeedback([15]);
+
     }, m.time);
+
   });
 
-  // Progress Bar Animation to 100% over 5.5s
+
   let elapsed = 0;
+
+
   const interval = setInterval(() => {
+
     elapsed += 50;
-    const pct = Math.min(100, (elapsed / 5500) * 100);
-    authProgressBar.style.width = pct + '%';
+
+    const pct =
+      Math.min(
+        100,
+        (elapsed / 5500) * 100
+      );
+
+    authProgressBar.style.width =
+      pct + '%';
+
 
     if (elapsed >= 5500) {
-      clearInterval(interval);
+
+      clearInterval(
+        interval
+      );
+
       triggerGreenBurstAndDashboard();
     }
+
   }, 50);
 }
 
-// STAGE 3: GREEN BURST AND DASHBOARD WELCOME
-function triggerGreenBurstAndDashboard() {
-  const authOverlay = document.getElementById('auth-overlay');
-  const burst = document.getElementById('green-burst-effect');
-  
-  // Fade out dark screen
-  authOverlay.classList.remove('active');
 
-  // Trigger burst
-  burst.classList.add('burst');
-  hapticFeedback([60, 120, 60]);
+// ============================================================
+// STAGE 3: GREEN BURST AND DASHBOARD
+// ============================================================
+
+function triggerGreenBurstAndDashboard() {
+
+  const authOverlay =
+    document.getElementById(
+      'auth-overlay'
+    );
+
+  const burst =
+    document.getElementById(
+      'green-burst-effect'
+    );
+
+
+  authOverlay.classList.remove(
+    'active'
+  );
+
+
+  burst.classList.add(
+    'burst'
+  );
+
+  hapticFeedback([
+    60,
+    120,
+    60
+  ]);
+
 
   setTimeout(() => {
-    burst.classList.remove('burst');
+
+    burst.classList.remove(
+      'burst'
+    );
+
   }, 900);
 
-  // Activate Stage 3
-  document.getElementById('stage-3').classList.add('active');
+
+  document
+    .getElementById('stage-3')
+    .classList
+    .add('active');
 }
 
+
+// ============================================================
 // MODAL MANAGEMENT
-const modalBackdrop = document.getElementById('modal-backdrop');
-const modalTitle = document.getElementById('modal-title');
-const modalBody = document.getElementById('modal-body');
+// ============================================================
+
+const modalBackdrop =
+  document.getElementById(
+    'modal-backdrop'
+  );
+
+const modalTitle =
+  document.getElementById(
+    'modal-title'
+  );
+
+const modalBody =
+  document.getElementById(
+    'modal-body'
+  );
+
 let currentOwnerName = "Admin";
 let inputPasscode = "";
 
+
 function openModal(action) {
-  modalBackdrop.classList.add('open');
-  modalBody.innerHTML = "";
-  inputPasscode = "";
+
+  modalBackdrop.classList.add(
+    'open'
+  );
+
+  modalBody.innerHTML =
+    "";
+
+  inputPasscode =
+    "";
+
 
   switch(action) {
+
     case "controlApps":
-      modalTitle.textContent = "System Apps Control";
-      ["Playcentrix Runtime", "Playcentrix Toolbox", "Playcentrix Bank", "Playcentrix Servers"].forEach(app => {
-        const btn = document.createElement('button');
-        btn.className = "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors";
-        btn.textContent = app;
-        btn.onclick = () => showOnOff(app);
-        modalBody.appendChild(btn);
+
+      modalTitle.textContent =
+        "System Apps Control";
+
+      [
+        "Playcentrix Runtime",
+        "Playcentrix Toolbox",
+        "Playcentrix Bank",
+        "Playcentrix Servers"
+      ].forEach(app => {
+
+        const btn =
+          document.createElement(
+            'button'
+          );
+
+        btn.className =
+          "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors";
+
+        btn.textContent =
+          app;
+
+        btn.onclick =
+          () => showOnOff(app);
+
+        modalBody.appendChild(
+          btn
+        );
+
       });
+
       break;
+
 
     case "changeOwner":
-      modalTitle.textContent = "Transfer Ownership";
+
+      modalTitle.textContent =
+        "Transfer Ownership";
+
       modalBody.innerHTML = `
-        <input type="text" id="newOwnerInput" placeholder="Enter New Owner Name" class="w-full py-3 px-4 rounded-xl bg-black/50 border border-white/20 text-center text-white focus:outline-none focus:border-cyan-400 font-medium mb-3">
-        <button onclick="submitNewOwner()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white shadow-lg">Initiate Transfer</button>
+        <input type="text"
+        id="newOwnerInput"
+        placeholder="Enter New Owner Name"
+        class="w-full py-3 px-4 rounded-xl bg-black/50 border border-white/20 text-center text-white focus:outline-none focus:border-cyan-400 font-medium mb-3">
+
+        <button
+        onclick="submitNewOwner()"
+        class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white shadow-lg">
+        Initiate Transfer
+        </button>
       `;
+
       break;
+
 
     case "accessBackup":
-      modalTitle.textContent = "Backup & Runtime";
-      ["Initialize Backup Protocol", "Engage Emergency Runtime"].forEach(opt => {
-        const btn = document.createElement('button');
-        btn.className = "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors mb-2";
-        btn.textContent = opt;
-        btn.onclick = () => promptFourDigit(opt);
-        modalBody.appendChild(btn);
+
+      modalTitle.textContent =
+        "Backup & Runtime";
+
+      [
+        "Initialize Backup Protocol",
+        "Engage Emergency Runtime"
+      ].forEach(opt => {
+
+        const btn =
+          document.createElement(
+            'button'
+          );
+
+        btn.className =
+          "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors mb-2";
+
+        btn.textContent =
+          opt;
+
+        btn.onclick =
+          () => promptFourDigit(opt);
+
+        modalBody.appendChild(
+          btn
+        );
+
       });
+
       break;
+
 
     case "advancedStorage":
-      modalTitle.textContent = "Storage Purge";
+
+      modalTitle.textContent =
+        "Storage Purge";
+
       modalBody.innerHTML = `
-        <p class="text-xs text-gray-300 mb-4">Purge all local cache entries and temporary overrides instantly.</p>
-        <button onclick="promptFourDigit('Purge Local Storage')" class="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">Authorize Storage Purge</button>
+        <p class="text-xs text-gray-300 mb-4">
+        Purge all local cache entries and temporary overrides instantly.
+        </p>
+
+        <button
+        onclick="promptFourDigit('Purge Local Storage')"
+        class="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">
+        Authorize Storage Purge
+        </button>
       `;
+
       break;
+
 
     case "revealSecrets":
-      modalTitle.textContent = "Classified Vault";
+
+      modalTitle.textContent =
+        "Classified Vault";
+
       modalBody.innerHTML = `
-        <p class="text-xs text-gray-400 mb-4">Enter 4-digit master passcode to decrypt secret vault.</p>
-        <button onclick="promptFourDigit('Reveal Secrets')" class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold">Enter Security Code</button>
+        <p class="text-xs text-gray-400 mb-4">
+        Enter 4-digit master passcode to decrypt secret vault.
+        </p>
+
+        <button
+        onclick="promptFourDigit('Reveal Secrets')"
+        class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold">
+        Enter Security Code
+        </button>
       `;
+
       break;
 
+
     case "deletePX":
-      modalTitle.textContent = "Delete Playcentrix";
+
+      modalTitle.textContent =
+        "Delete Playcentrix";
+
       modalBody.innerHTML = `
-        <p class="text-xs text-red-400 mb-3">WARNING: Irreversible core system deletion protocol.</p>
-        <input type="text" id="deleteConfirmInput" placeholder="Type CONFIRM" class="w-full py-3 px-4 rounded-xl bg-black/60 border border-red-500/30 text-center text-red-400 focus:outline-none focus:border-red-500 font-bold uppercase mb-3">
-        <button onclick="submitDelete()" class="w-full py-3 rounded-xl bg-red-600 text-white font-bold shadow-lg shadow-red-600/30">VERIFY TERMINATION</button>
+        <p class="text-xs text-red-400 mb-3">
+        WARNING: Irreversible core system deletion protocol.
+        </p>
+
+        <input
+        type="text"
+        id="deleteConfirmInput"
+        placeholder="Type CONFIRM"
+        class="w-full py-3 px-4 rounded-xl bg-black/60 border border-red-500/30 text-center text-red-400 focus:outline-none focus:border-red-500 font-bold uppercase mb-3">
+
+        <button
+        onclick="submitDelete()"
+        class="w-full py-3 rounded-xl bg-red-600 text-white font-bold shadow-lg shadow-red-600/30">
+        VERIFY TERMINATION
+        </button>
       `;
+
       break;
   }
 }
 
+
 function closeModal() {
-  modalBackdrop.classList.remove('open');
+
+  modalBackdrop.classList.remove(
+    'open'
+  );
 }
 
+
 function showOnOff(appName) {
+
   modalBody.innerHTML = `
-    <p class="text-xs text-cyan-400 font-mono mb-3">TARGET: ${appName}</p>
-    <button onclick="promptFourDigit('${appName} ACTIVATE')" class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold mb-2">ACTIVATE</button>
-    <button onclick="promptFourDigit('${appName} DEACTIVATE')" class="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-bold">DEACTIVATE</button>
+
+    <p class="text-xs text-cyan-400 font-mono mb-3">
+    TARGET: ${appName}
+    </p>
+
+    <button
+    onclick="promptFourDigit('${appName} ACTIVATE')"
+    class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold mb-2">
+    ACTIVATE
+    </button>
+
+    <button
+    onclick="promptFourDigit('${appName} DEACTIVATE')"
+    class="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-bold">
+    DEACTIVATE
+    </button>
+
   `;
 }
 
+
 function submitNewOwner() {
-  const val = document.getElementById('newOwnerInput').value.trim();
+
+  const val =
+    document
+      .getElementById(
+        'newOwnerInput'
+      )
+      .value
+      .trim();
+
   if (!val) return;
-  currentOwnerName = val;
-  promptFourDigit("Transfer Ownership to " + val);
+
+  currentOwnerName =
+    val;
+
+  promptFourDigit(
+    "Transfer Ownership to " + val
+  );
 }
 
+
 function submitDelete() {
-  const val = document.getElementById('deleteConfirmInput').value.trim();
-  if (val.toUpperCase() === "CONFIRM") {
-    promptFourDigit("Delete Playcentrix Core");
+
+  const val =
+    document
+      .getElementById(
+        'deleteConfirmInput'
+      )
+      .value
+      .trim();
+
+  if (
+    val.toUpperCase() ===
+    "CONFIRM"
+  ) {
+
+    promptFourDigit(
+      "Delete Playcentrix Core"
+    );
+
   } else {
-    alert("Please type 'CONFIRM' to proceed.");
+
+    alert(
+      "Please type 'CONFIRM' to proceed."
+    );
   }
 }
 
-/* 4-DIGIT SECURITY NUMPAD LOGIC */
+
+// ============================================================
+// 4-DIGIT SECURITY NUMPAD
+// ============================================================
+
 function promptFourDigit(actionTitle) {
-  inputPasscode = "";
-  modalTitle.textContent = "Security Code Required";
+
+  inputPasscode =
+    "";
+
+  modalTitle.textContent =
+    "Security Code Required";
+
   modalBody.innerHTML = `
-    <div class="text-xs text-gray-400 mb-2">${actionTitle}</div>
-    <div id="passcode-dots" class="flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400">••••</div>
+
+    <div class="text-xs text-gray-400 mb-2">
+      ${actionTitle}
+    </div>
+
+    <div
+    id="passcode-dots"
+    class="flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400">
+    ••••
+    </div>
+
     <div class="grid grid-cols-3 gap-2 mt-4">
-      ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="numpad-btn" onclick="pressDigit('${n}', '${actionTitle}')">${n}</button>`).join('')}
-      <button class="numpad-btn text-gray-400 text-sm" onclick="clearDigit()">CLEAR</button>
-      <button class="numpad-btn" onclick="pressDigit('0', '${actionTitle}')">0</button>
-      <button class="numpad-btn text-cyan-400 text-sm" onclick="verifyPasscode('${actionTitle}')">OK</button>
+
+      ${[
+        1,2,3,4,5,6,7,8,9
+      ].map(n => `
+        <button
+        class="numpad-btn"
+        onclick="pressDigit('${n}', '${actionTitle}')">
+        ${n}
+        </button>
+      `).join('')}
+
+      <button
+      class="numpad-btn text-gray-400 text-sm"
+      onclick="clearDigit()">
+      CLEAR
+      </button>
+
+      <button
+      class="numpad-btn"
+      onclick="pressDigit('0', '${actionTitle}')">
+      0
+      </button>
+
+      <button
+      class="numpad-btn text-cyan-400 text-sm"
+      onclick="verifyPasscode('${actionTitle}')">
+      OK
+      </button>
+
     </div>
   `;
 }
 
+
 function pressDigit(num, actionTitle) {
-  if (inputPasscode.length < 4) {
-    inputPasscode += num;
+
+  if (
+    inputPasscode.length < 4
+  ) {
+
+    inputPasscode +=
+      num;
+
     hapticFeedback([10]);
+
     updatePasscodeDots();
-    if (inputPasscode.length === 4) {
-      setTimeout(() => verifyPasscode(actionTitle), 150);
+
+
+    if (
+      inputPasscode.length === 4
+    ) {
+
+      setTimeout(() => {
+
+        verifyPasscode(
+          actionTitle
+        );
+
+      }, 150);
     }
   }
 }
 
+
 function clearDigit() {
-  inputPasscode = "";
+
+  inputPasscode =
+    "";
+
   updatePasscodeDots();
 }
 
+
 function updatePasscodeDots() {
-  const dotsContainer = document.getElementById('passcode-dots');
-  if (!dotsContainer) return;
-  let display = "";
-  for (let i = 0; i < 4; i++) {
-    display += i < inputPasscode.length ? "● " : "○ ";
+
+  const dotsContainer =
+    document.getElementById(
+      'passcode-dots'
+    );
+
+  if (!dotsContainer)
+    return;
+
+  let display =
+    "";
+
+  for (
+    let i = 0;
+    i < 4;
+    i++
+  ) {
+
+    display +=
+      i < inputPasscode.length
+        ? "● "
+        : "○ ";
   }
-  dotsContainer.textContent = display.trim();
+
+  dotsContainer.textContent =
+    display.trim();
 }
 
-function verifyPasscode(actionTitle) {
-  if (inputPasscode === "4321") {
-    hapticFeedback([40, 80]);
-    sendTelegramNotice(`✅ Success: ${actionTitle} (Code: 4321)`);
 
-    if (actionTitle === "Reveal Secrets") {
-      // PLANT SECRET VAULT
-      modalTitle.textContent = "Classified Secrets";
+function verifyPasscode(actionTitle) {
+
+  if (
+    inputPasscode ===
+    "4321"
+  ) {
+
+    hapticFeedback([
+      40,
+      80
+    ]);
+
+    sendTelegramNotice(
+      `✅ Success: ${actionTitle} (Code: 4321)`
+    );
+
+
+    if (
+      actionTitle ===
+      "Reveal Secrets"
+    ) {
+
+      modalTitle.textContent =
+        "Classified Secrets";
+
       modalBody.innerHTML = `
+
         <div class="py-4 text-center space-y-3">
-          <div class="text-4xl animate-bounce">🌿👀🌿</div>
-          <h4 class="text-lg font-bold text-emerald-400">The Epicstream Destruction Plan</h4>
+
+          <div class="text-4xl animate-bounce">
+            🌿👀🌿
+          </div>
+
+          <h4 class="text-lg font-bold text-emerald-400">
+            The Epicstream Destruction Plan
+          </h4>
+
           <p class="text-xs text-gray-300 leading-relaxed px-2">
-            Files: All Documents and Files with Proof are stord in PCX Vault!<br><br>
+
+            Files: All Documents and Files with Proof are stord in PCX Vault!
+
+            <br><br>
+
             We have collected all the required files of epicstream and accured epicstream-alike and available usernames and domains where available and further plans to destory epicstream asap.
+
           </p>
-          <div class="text-[10px] text-cyan-400 font-mono pt-2">[ Level 4 Secrets Remapped ]</div>
+
+          <div class="text-[10px] text-cyan-400 font-mono pt-2">
+            [ Level 4 Secrets Remapped ]
+          </div>
+
         </div>
       `;
-    } else if (actionTitle.includes("Purge Local Storage")) {
+
+
+    } else if (
+      actionTitle.includes(
+        "Purge Local Storage"
+      )
+    ) {
+
       localStorage.clear();
       sessionStorage.clear();
-      modalTitle.textContent = "Storage Purged";
-      modalBody.innerHTML = `<p class="text-emerald-400 text-sm py-4">All cached items and local variables cleared successfully.</p>`;
-      setTimeout(closeModal, 1500);
+
+      modalTitle.textContent =
+        "Storage Purged";
+
+      modalBody.innerHTML = `
+        <p class="text-emerald-400 text-sm py-4">
+          All cached items and local variables cleared successfully.
+        </p>
+      `;
+
+      setTimeout(
+        closeModal,
+        1500
+      );
+
+
     } else {
-      modalTitle.textContent = "Action Authorized";
-      modalBody.innerHTML = `<p class="text-emerald-400 text-sm py-4">Protocol [${actionTitle}] executed successfully.</p>`;
-      setTimeout(closeModal, 1400);
+
+      modalTitle.textContent =
+        "Action Authorized";
+
+      modalBody.innerHTML = `
+        <p class="text-emerald-400 text-sm py-4">
+          Protocol [${actionTitle}] executed successfully.
+        </p>
+      `;
+
+      setTimeout(
+        closeModal,
+        1400
+      );
     }
+
+
   } else {
-    hapticFeedback([100, 50, 100]);
-    sendTelegramNotice(`❌ Denied: ${actionTitle} Attempted: ${inputPasscode}`);
-    const dotsContainer = document.getElementById('passcode-dots');
+
+    hapticFeedback([
+      100,
+      50,
+      100
+    ]);
+
+    sendTelegramNotice(
+      `❌ Denied: ${actionTitle} Attempted: ${inputPasscode}`
+    );
+
+
+    const dotsContainer =
+      document.getElementById(
+        'passcode-dots'
+      );
+
+
     if (dotsContainer) {
-      dotsContainer.textContent = "DENIED";
-      dotsContainer.className = "text-red-500 font-bold text-xl py-2";
+
+      dotsContainer.textContent =
+        "DENIED";
+
+      dotsContainer.className =
+        "text-red-500 font-bold text-xl py-2";
     }
+
+
     setTimeout(() => {
-      inputPasscode = "";
+
+      inputPasscode =
+        "";
+
       updatePasscodeDots();
-      if (dotsContainer) dotsContainer.className = "flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400";
+
+      if (dotsContainer) {
+
+        dotsContainer.className =
+          "flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400";
+      }
+
     }, 1200);
   }
 }
 
+
+// ============================================================
 // TELEGRAM TELEMETRY
+// ============================================================
+
 function sendTelegramNotice(message) {
-  const token = "7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
-  const chat_id = "1561851616";
-  const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`;
-  
-  fetch(url).catch(err => console.log("Telegram dispatch offline"));
+
+  const token =
+    "7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
+
+  const chat_id =
+    "1561851616";
+
+  const url =
+    `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`;
+
+  fetch(url)
+    .catch(err => {
+      console.log(
+        "Telegram dispatch offline"
+      );
+    });
 }
 </script>
 </body>
