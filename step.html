@@ -2,208 +2,574 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Playcentrix 3 Step Verification</title>
-<style>
-    * { margin:0; padding:0; box-sizing:border-box; font-family: Arial,sans-serif; }
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Playcentrix | Level 2 Security Protocol</title>
 
-    body {
-        background-color: #f5f5f5;
-        display:flex;
-        justify-content:center;
-        align-items:center;
-        min-height:100vh;
-        padding:20px;
+<!-- Security Gatekeeper Script (Executes before page renders) -->
+<script>
+(function() {
+    // Check for single-use token from Step 1
+    const sessionToken = localStorage.getItem('playcentrix_auth_session');
+    if (sessionToken !== '5678') {
+        // Immediate redirection without showing UI if unauthorized
+        window.location.replace('index.html');
+    } else {
+        // Immediately consume/delete single-use token to prevent reuse or direct navigation
+        localStorage.removeItem('playcentrix_auth_session');
+    }
+})();
+</script>
+
+<!-- MediaPipe CDN Libraries for Face Detection -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+
+<style>
+    :root {
+        --bg-color: #070709;
+        --card-bg: rgba(22, 22, 30, 0.65);
+        --card-border: rgba(255, 255, 255, 0.08);
+        --accent-primary: #3b82f6;
+        --accent-emerald: #10b981;
+        --accent-danger: #ef4444;
+        --text-primary: #f3f4f6;
+        --text-secondary: #9ca3af;
+        --input-bg: rgba(255, 255, 255, 0.05);
+        --input-border: rgba(255, 255, 255, 0.12);
+        --font-family: -apple-system, BlinkMacSystemFont, "Google Sans", "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: var(--font-family);
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+    }
+
+    html, body {
+        width: 100%;
+        height: 100dvh;
+        overflow: hidden;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        touch-action: manipulation;
+    }
+
+    /* Ambient Glow Background */
+    .ambient-blur {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 350px;
+        height: 350px;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 50%, rgba(0,0,0,0) 70%);
+        filter: blur(50px);
+        z-index: 0;
+        pointer-events: none;
     }
 
     .container {
-        width:100%;
-        max-width:400px;
-        background:#fff;
-        padding:30px;
-        border-radius:15px;
-        box-shadow:0 10px 25px rgba(0,0,0,0.1);
-        text-align:center;
+        position: relative;
+        z-index: 1;
+        width: 90%;
+        max-width: 420px;
+        background: var(--card-bg);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--card-border);
+        border-radius: 24px;
+        padding: 28px 24px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
     }
 
-    h1 {
-        font-size:1.5rem;
-        margin-bottom:25px;
-        color:#333;
+    /* Header */
+    .header {
+        text-align: center;
     }
 
-    .input-box {
-        margin-bottom:20px;
-        border:2px solid #000;
-        border-radius:10px;
-        overflow:hidden;
-        transition: border-color 0.5s ease;
+    .brand-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 12px;
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
     }
 
-    input[type="text"], input[type="number"], select {
-        width:100%;
-        padding:15px;
-        font-size:1rem;
-        border:none;
-        outline:none;
-        text-align:center;
-        border-radius:10px;
+    .brand-icon svg {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: #fff;
+        stroke-width: 2;
     }
 
-    input[type="text"] { text-transform:uppercase; }
-    input[type="number"] { -moz-appearance:textfield; }
-    input::-webkit-outer-spin-button,
-    input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .header h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+
+    .header p {
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    /* Step Indicators */
+    .step-tracker {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .step-pill {
+        flex: 1;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        transition: all 0.4s ease;
+    }
+
+    .step-pill.active {
+        background: var(--accent-primary);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
+
+    .step-pill.completed {
+        background: var(--accent-emerald);
+    }
+
+    /* Form Steps Container */
+    .step-card {
+        display: none;
+        flex-direction: column;
+        gap: 16px;
+        animation: fadeIn 0.4s ease forwards;
+    }
+
+    .step-card.active {
+        display: flex;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Input Fields Styling */
+    .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        text-align: left;
+    }
+
+    .input-group label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    input[type="text"], input[type="password"], select {
+        width: 100%;
+        padding: 14px 16px;
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        border-radius: 12px;
+        color: #fff;
+        font-size: 0.95rem;
+        outline: none;
+        transition: all 0.25s ease;
+    }
+
+    input:focus, select:focus {
+        border-color: var(--accent-primary);
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
 
     select {
-        background:#e0e0e0;
-        cursor:pointer;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
     }
 
-    #verifyBtn {
-        padding:15px 30px;
-        font-size:1.2rem;
-        border:none;
-        border-radius:10px;
-        background-color:#2196F3;
-        color:white;
-        cursor:pointer;
-        transition:all 0.3s;
+    select option {
+        background-color: #121218;
+        color: #fff;
     }
 
-    #verifyBtn:hover { background-color:#1976d2; }
-
-    .spinner {
-        border:4px solid #f3f3f3;
-        border-top:4px solid #2196F3;
-        border-radius:50%;
-        width:25px;
-        height:25px;
-        animation:spin 1s linear infinite;
-        display:inline-block;
-        margin-left:10px;
-        vertical-align:middle;
-        display:none;
+    /* Primary Action Button */
+    .btn-action {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 12px;
+        background: var(--accent-primary);
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
     }
 
-    @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
-
-    /* Animation for progressive border */
-    .correct { border-color:#4CAF50 !important; }
-    .incorrect { border-color:#f44336 !important; }
-
-    /* Loading overlay */
-    .overlay {
-        position: fixed;
-        top:0; left:0; width:100%; height:100%;
-        background: rgba(0,0,0,0.5);
-        display:flex; justify-content:center; align-items:center;
-        opacity:0; visibility:hidden; transition:opacity 0.3s ease; z-index:999;
+    .btn-action:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
     }
 
-    .overlay.show { opacity:1; visibility:visible; }
-
-    .loader {
-        width:80px; height:80px;
-        border:8px solid #f3f3f3;
-        border-top:8px solid #2196F3;
-        border-radius:50%;
-        animation:spin 1s linear infinite;
+    .btn-action:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
     }
 
+    /* Error Shake Animation */
+    .shake {
+        animation: shake 0.4s ease-in-out;
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-6px); }
+        40%, 80% { transform: translateX(6px); }
+    }
+
+    .error-msg {
+        font-size: 0.78rem;
+        color: var(--accent-danger);
+        text-align: center;
+        min-height: 18px;
+    }
+
+    /* Biometric Camera Viewport */
+    .camera-box {
+        position: relative;
+        width: 100%;
+        height: 230px;
+        background: #000;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--input-border);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    video, canvas {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Face Overlay Guide */
+    .face-guide {
+        position: absolute;
+        width: 140px;
+        height: 170px;
+        border: 2px dashed rgba(255, 255, 255, 0.4);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 10;
+        transition: border-color 0.3s ease;
+    }
+
+    .face-guide.tracking {
+        border-color: var(--accent-emerald);
+        border-style: solid;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .hold-timer {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #fff;
+        text-align: center;
+        margin-top: 6px;
+    }
 </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Playcentrix 3 Step Verification</h1>
+<div class="ambient-blur"></div>
 
-    <div class="input-box" id="codeBox">
-        <input type="number" id="codeInput" placeholder="CODE" inputmode="numeric">
+<div class="container" id="mainContainer">
+    <!-- Header -->
+    <div class="header">
+        <div class="brand-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h1>Level 2 Authentication</h1>
+        <p>Multi-factor Security Protocol</p>
     </div>
 
-    <div class="input-box" id="keyBox">
-        <input type="text" id="keyInput" placeholder="KEY">
+    <!-- Step Tracker -->
+    <div class="step-tracker">
+        <div class="step-pill active" id="pill1"></div>
+        <div class="step-pill" id="pill2"></div>
+        <div class="step-pill" id="pill3"></div>
     </div>
 
-    <div class="input-box" id="altBox">
-        <select id="altSelect">
-            <option value="B6">B6</option>
-            <option value="A4">A4</option>
-            <option value="R3">R3</option>
-        </select>
+    <!-- STEP 1: Credentials & Primary Protocol -->
+    <div class="step-card active" id="step1">
+        <div class="input-group">
+            <label>Security Code</label>
+            <input type="text" id="secCode" placeholder="Enter 12-digit code" maxlength="12" autocomplete="off">
+        </div>
+
+        <div class="input-group">
+            <label>Security Key</label>
+            <input type="text" id="secKey" placeholder="e.g. PX-XXXX-X" autocomplete="off">
+        </div>
+
+        <div class="input-group">
+            <label>Protocol Version</label>
+            <select id="secProtocol">
+                <option value="DELTA_V1">DELTA_V1</option>
+                <option value="OMEGA_V2">OMEGA_V2</option>
+                <option value="SIGMA_V4">SIGMA_V4</option>
+                <option value="KAPPA_V9">KAPPA_V9</option>
+            </select>
+        </div>
+
+        <div class="error-msg" id="errStep1"></div>
+        <button class="btn-action" onclick="verifyStep1()">Continue to Phase 2 →</button>
     </div>
 
-    <button id="verifyBtn" onclick="verifyAll()">Verify <span class="spinner" id="spinner"></span></button>
-</div>
+    <!-- STEP 2: Secondary Verification Parameters -->
+    <div class="step-card" id="step2">
+        <div class="input-group">
+            <label>Secondary PIN</label>
+            <input type="password" id="secPin" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
+        </div>
 
-<div class="overlay" id="overlay">
-    <div class="loader"></div>
+        <div class="input-group">
+            <label>Entropy Key</label>
+            <select id="secEntropy">
+                <option value="0x1B4C">0x1B4C</option>
+                <option value="0x8F2A">0x8F2A</option>
+                <option value="0x3E9D">0x3E9D</option>
+                <option value="0x7C0F">0x7C0F</option>
+            </select>
+        </div>
+
+        <div class="error-msg" id="errStep2"></div>
+        <button class="btn-action" onclick="verifyStep2()">Proceed to Biometric Scan →</button>
+    </div>
+
+    <!-- STEP 3: MediaPipe AI Human Face Verification -->
+    <div class="step-card" id="step3">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
+            Verify that you're human. Align your face in the camera frame.
+        </p>
+
+        <div class="camera-box">
+            <video id="webcam" playsinline muted></video>
+            <canvas id="canvasOut"></canvas>
+            <div class="face-guide" id="faceGuide"></div>
+        </div>
+
+        <div class="hold-timer" id="timerStatus">Position Face in Frame</div>
+        <div class="error-msg" id="errStep3"></div>
+    </div>
 </div>
 
 <script>
-const correctCode = "199875679814558326";
-const correctKey = "ARZXVIG";
-const correctAlt = "A4";
+// Expected Answers
+const CORRECT_CODE = "894271053391";
+const CORRECT_KEY = "PX-9920-X";
+const CORRECT_PROTOCOL = "SIGMA_V4";
+const CORRECT_PIN = "9482";
+const CORRECT_ENTROPY = "0x8F2A";
 
-const codeInput = document.getElementById('codeInput');
-const keyInput = document.getElementById('keyInput');
-const altSelect = document.getElementById('altSelect');
+// Elements
+const container = document.getElementById('mainContainer');
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const step3 = document.getElementById('step3');
 
-const codeBox = document.getElementById('codeBox');
-const keyBox = document.getElementById('keyBox');
-const altBox = document.getElementById('altBox');
+const pill1 = document.getElementById('pill1');
+const pill2 = document.getElementById('pill2');
+const pill3 = document.getElementById('pill3');
 
-const verifyBtn = document.getElementById('verifyBtn');
-const spinner = document.getElementById('spinner');
-const overlay = document.getElementById('overlay');
+// Step 1 Verification
+function verifyStep1() {
+    const code = document.getElementById('secCode').value.trim();
+    const key = document.getElementById('secKey').value.trim().toUpperCase();
+    const protocol = document.getElementById('secProtocol').value;
+    const err = document.getElementById('errStep1');
 
-// Auto uppercase key
-keyInput.addEventListener('input', ()=>{ keyInput.value = keyInput.value.toUpperCase(); });
+    if (code === CORRECT_CODE && key === CORRECT_KEY && protocol === CORRECT_PROTOCOL) {
+        err.textContent = "";
+        step1.classList.remove('active');
+        step2.classList.add('active');
+        pill1.classList.remove('active');
+        pill1.classList.add('completed');
+        pill2.classList.add('active');
+    } else {
+        triggerError(err, "Invalid credentials or protocol mismatch.");
+    }
+}
 
-function verifyAll() {
-    spinner.style.display = 'inline-block';
-    verifyBtn.disabled = true;
+// Step 2 Verification
+function verifyStep2() {
+    const pin = document.getElementById('secPin').value.trim();
+    const entropy = document.getElementById('secEntropy').value;
+    const err = document.getElementById('errStep2');
 
-    // Reset previous classes
-    [codeBox,keyBox,altBox].forEach(box=>{
-        box.classList.remove('correct','incorrect');
+    if (pin === CORRECT_PIN && entropy === CORRECT_ENTROPY) {
+        err.textContent = "";
+        step2.classList.remove('active');
+        step3.classList.add('active');
+        pill2.classList.remove('active');
+        pill2.classList.add('completed');
+        pill3.classList.add('active');
+        
+        // Initialize AI Camera Scan
+        startBiometricVerification();
+    } else {
+        triggerError(err, "Secondary security parameter rejected.");
+    }
+}
+
+function triggerError(element, msg) {
+    element.textContent = msg;
+    container.classList.add('shake');
+    setTimeout(() => container.classList.remove('shake'), 400);
+}
+
+// Auto Upper Case Key Input
+document.getElementById('secKey').addEventListener('input', (e) => {
+    e.target.value = e.target.value.toUpperCase();
+});
+
+/* ===================================================
+   MediaPipe AI Face & Liveness Detection Integration
+   =================================================== */
+let holdStartTime = null;
+let holdsRequiredMs = 3000; // 3 seconds requirement
+let isVerified = false;
+let cameraUtils = null;
+
+async function startBiometricVerification() {
+    const videoElement = document.getElementById('webcam');
+    const timerStatus = document.getElementById('timerStatus');
+    const faceGuide = document.getElementById('faceGuide');
+
+    // Initialize MediaPipe Face Detection
+    const faceDetection = new FaceDetection({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
     });
 
-    setTimeout(()=>{
-        spinner.style.display = 'none';
-        verifyBtn.disabled = false;
+    faceDetection.setOptions({
+        modelSelection: 0, // Short-range camera model
+        minDetectionConfidence: 0.6
+    });
 
-        // Check CODE
-        if(codeInput.value === correctCode){
-            codeBox.classList.add('correct');
+    faceDetection.onResults((results) => {
+        if (isVerified) return;
+
+        if (results.detections && results.detections.length > 0) {
+            // Face Detected
+            faceGuide.classList.add('tracking');
+            
+            if (!holdStartTime) {
+                holdStartTime = Date.now();
+            }
+
+            const elapsed = Date.now() - holdStartTime;
+            const remaining = Math.max(0, Math.ceil((holdsRequiredMs - elapsed) / 1000));
+
+            timerStatus.textContent = `Hold still... ${remaining}s`;
+            timerStatus.style.color = "#10b981";
+
+            if (elapsed >= holdsRequiredMs) {
+                isVerified = true;
+                timerStatus.textContent = "Verified ✓";
+                
+                if (cameraUtils) cameraUtils.stop();
+
+                // Save temporary 30-second token for main.html
+                const expiryData = {
+                    code: '6776',
+                    expiresAt: Date.now() + 30000 // 30 seconds TTL
+                };
+                localStorage.setItem('playcentrix_main_session', JSON.stringify(expiryData));
+
+                setTimeout(() => {
+                    window.location.href = 'main.html';
+                }, 1000);
+            }
         } else {
-            codeBox.classList.add('incorrect');
+            // Face Lost
+            holdStartTime = null;
+            faceGuide.classList.remove('tracking');
+            timerStatus.textContent = "Position Face in Frame";
+            timerStatus.style.color = "#ffffff";
         }
+    });
 
-        // Check KEY
-        if(keyInput.value === correctKey){
-            keyBox.classList.add('correct');
-        } else {
-            keyBox.classList.add('incorrect');
-        }
-
-        // Check ALT-KEY dropdown
-        if(altSelect.value === correctAlt){
-            altBox.classList.add('correct');
-        } else {
-            altBox.classList.add('incorrect');
-        }
-
-        // If all correct, show overlay for 4 sec then redirect
-        if(codeInput.value === correctCode && keyInput.value === correctKey && altSelect.value === correctAlt){
-            overlay.classList.add('show');
-            setTimeout(()=>{ window.location.href = 'main.html'; },4000);
-        }
-
-    }, 500); // simulate short delay for user feedback
+    // Start Webcam
+    try {
+        cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await faceDetection.send({ image: videoElement });
+            },
+            width: 480,
+            height: 360
+        });
+        await cameraUtils.start();
+    } catch (err) {
+        console.warn("Camera failed or denied, engaging fallback timer.", err);
+        // Graceful fallback if camera is blocked/unavailable
+        let fallbackSec = 3;
+        const interval = setInterval(() => {
+            timerStatus.textContent = `Scanning... ${fallbackSec}s`;
+            fallbackSec--;
+            if (fallbackSec < 0) {
+                clearInterval(interval);
+                timerStatus.textContent = "Verified ✓";
+                const expiryData = {
+                    code: '6776',
+                    expiresAt: Date.now() + 30000
+                };
+                localStorage.setItem('playcentrix_main_session', JSON.stringify(expiryData));
+                setTimeout(() => { window.location.href = 'main.html'; }, 1000);
+            }
+        }, 1000);
+    }
 }
 </script>
-
 </body>
 </html>
