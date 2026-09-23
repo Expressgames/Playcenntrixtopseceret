@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Playcentrix Reach | Secure Terminal</title>
+<!-- Tailwind CSS for fluid utility layout -->
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --glass-bg: rgba(18, 24, 38, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-specular: rgba(255, 255, 255, 0.22);
+  --accent-cyan: #00f2fe;
+  --accent-emerald: #00ff88;
+  --accent-danger: #ff3b30;
+  --apple-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: #030712;
+  color: #ffffff;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+#neural-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* STAGE CONTAINER MANAGEMENT */
+.stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.96) translateY(10px);
+  transition: all 0.7s var(--apple-ease);
+  padding: 1.5rem;
+}
+
+.stage.active {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1) translateY(0);
+}
+
+/* LIQUID GLASS PANEL STYLING */
+.liquid-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.65), 
+              inset 0 1px 0 0 var(--glass-specular);
+  border-radius: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+}
+
+.slider-track-box {
+  position: relative;
+  width: 100%;
+  height: 58px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 30px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+
+.slider-fill-bar {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  bottom: 4px;
+  width: 0%;
+  background: linear-gradient(90deg, #0052d4, #4364f7, #6fb1fc);
+  border-radius: 26px;
+  transition: width 0.08s ease-out;
+  box-shadow: 0 0 15px rgba(67, 100, 247, 0.4);
+}
+
+.slider-thumb-node {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 48px;
+  height: 48px;
+  background: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  transition: left 0.08s ease-out, background-color 0.3s, transform 0.2s;
+  z-index: 5;
+}
+
+.native-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.scanner-orb {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.3s var(--apple-ease), border-color 0.3s, box-shadow 0.3s;
+}
+
+.scanner-orb:active {
+  transform: scale(0.95);
+}
+
+.scanner-svg-icon {
+  width: 72px;
+  height: 72px;
+  fill: rgba(255, 255, 255, 0.4);
+  transition: all 0.3s ease;
+  z-index: 2;
+}
+
+.ring-progress-svg {
+  position: absolute;
+  inset: -6px;
+  width: 172px;
+  height: 172px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.ring-progress-circle {
+  stroke-dasharray: 520;
+  stroke-dashoffset: 520;
+  transition: stroke-dashoffset 0.05s linear;
+}
+
+.scanner-orb.active-scan .ring-progress-circle {
+  stroke: var(--accent-cyan);
+  filter: drop-shadow(0 0 10px var(--accent-cyan));
+}
+
+.scanner-orb.active-scan .scanner-svg-icon {
+  fill: var(--accent-cyan);
+  filter: drop-shadow(0 0 12px var(--accent-cyan));
+  transform: scale(1.08);
+}
+
+.scanner-orb.success-scan {
+  border-color: var(--accent-emerald);
+  background: rgba(0, 255, 136, 0.12);
+  box-shadow: 0 0 40px rgba(0, 255, 136, 0.3);
+}
+
+.scanner-orb.success-scan .scanner-svg-icon {
+  fill: var(--accent-emerald);
+  filter: drop-shadow(0 0 15px var(--accent-emerald));
+}
+
+#auth-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s ease;
+}
+
+#auth-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.apple-spinner {
+  width: 90px;
+  height: 90px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.laser-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--accent-cyan);
+  border-right-color: rgba(0, 242, 254, 0.3);
+  animation: spinRing 1.2s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+}
+
+.laser-ring-outer {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  animation: spinRingReverse 3s linear infinite;
+}
+
+@keyframes spinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spinRingReverse {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+.pulsing-core {
+  width: 24px;
+  height: 24px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 25px var(--accent-cyan);
+  animation: corePulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes corePulse {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.2); opacity: 1; }
+}
+
+#green-burst-effect {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(0, 255, 136, 0.6) 0%, rgba(0, 242, 254, 0.2) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0;
+  transform: scale(0.2);
+  transition: transform 0.8s var(--apple-ease), opacity 0.8s ease;
+}
+
+#green-burst-effect.burst {
+  opacity: 1;
+  transform: scale(2.5);
+}
+
+.dash-card {
+  transition: transform 0.3s var(--apple-ease), background 0.3s, border-color 0.3s, box-shadow 0.3s;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+}
+
+.stage.active .dash-card {
+  animation: cardPopIn 0.6s var(--apple-ease) forwards;
+}
+
+.dash-card:active {
+  transform: scale(0.96) !important;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes cardPopIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.modal-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 400px;
+  transform: scale(0.9) translateY(20px);
+  transition: transform 0.4s var(--apple-ease);
+}
+
+.modal-backdrop.open .modal-card {
+  transform: scale(1) translateY(0);
+}
+
+.numpad-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  height: 56px;
+  font-size: 1.35rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.numpad-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.92);
+}
+</style>
+</head>
+<body class="flex items-center justify-center select-none overflow-hidden text-white bg-black">
+
+<!-- Dynamic Neural Mesh Canvas -->
+<canvas id="neural-canvas"></canvas>
+
+<!-- Green Flash Burst Overlay -->
+<div id="green-burst-effect"></div>
+
+<!-- STAGE 2.5: Pitch Black Authorization Preloader -->
+<div id="auth-overlay">
+  <div class="apple-spinner mb-6">
+    <div class="laser-ring-outer"></div>
+    <div class="laser-ring"></div>
+    <div class="pulsing-core"></div>
+  </div>
+  <div class="text-center px-6">
+    <h3 id="auth-status-text" class="text-lg font-semibold tracking-widest text-cyan-400 uppercase mb-2">
+      AUTHORIZING ACCESS...
+    </h3>
+    <div class="w-48 h-1.5 bg-gray-900 rounded-full mx-auto overflow-hidden border border-white/10">
+      <div id="auth-progress-bar" class="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 w-0 transition-all duration-100 ease-linear"></div>
+    </div>
+    <p id="auth-sub-text" class="text-xs text-gray-400 mt-3 font-mono">ENCRYPTED PROTOCOL 256-BIT</p>
+  </div>
+</div>
+
+<!-- MAIN CONTAINER -->
+<main class="relative w-full max-w-md h-full max-h-[920px] flex flex-col justify-between z-10 px-4 py-6">
+
+  <!-- STAGE 1: SYSTEM INITIALIZATION SLIDERS -->
+  <div id="stage-1" class="stage active">
+    <div class="w-full text-center mb-6">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs tracking-wider uppercase mb-3">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Security Gate 01
+      </div>
+      <h2 class="text-2xl font-bold tracking-tight text-white">INITIALIZE SYSTEM</h2>
+      <p class="text-xs text-gray-400 mt-1">Slide all 3 verification triggers to unlock access</p>
+    </div>
+
+    <div class="w-full liquid-glass p-6 space-y-5">
+      <!-- Slider 1 -->
+      <div>
+        <div class="flex justify-between text-xs text-gray-300 font-medium mb-2">
+          <span>Slider Verifycation Check</span>
+          <span id="s1-val" class="text-cyan-400 font-mono">0%</span>
+        </div>
+        <div class="slider-track-box">
+          <div class="slider-fill-bar" id="fill-1"></div>
+          <div class="slider-thumb-node" id="thumb-1">❯</div>
+          <input type="range" class="native-range" id="s1" min="0" max="100" value="0">
+        </div>
+      </div>
+
+      <!-- Slider 2 -->
+      <div>
+        <div class="flex justify-between text-xs text-gray-300 font-medium mb-2">
+          <span>Human Verifycation Check</span>
+          <span id="s2-val" class="text-cyan-400 font-mono">0%</span>
+        </div>
+        <div class="slider-track-box">
+          <div class="slider-fill-bar" id="fill-2"></div>
+          <div class="slider-thumb-node" id="thumb-2">❯</div>
+          <input type="range" class="native-range" id="s2" min="0" max="100" value="0">
+        </div>
+      </div>
+
+      <!-- Slider 3 -->
+      <div>
+        <div class="flex justify-between text-xs text-gray-300 font-medium mb-2">
+          <span>Face Verification Check</span>
+          <span id="s3-val" class="text-cyan-400 font-mono">0%</span>
+        </div>
+        <div class="slider-track-box">
+          <div class="slider-fill-bar" id="fill-3"></div>
+          <div class="slider-thumb-node" id="thumb-3">❯</div>
+          <input type="range" class="native-range" id="s3" min="0" max="100" value="0">
+        </div>
+      </div>
+    </div>
+    
+    <div class="text-center text-[10px] text-gray-500 tracking-widest uppercase mt-6">
+      Playcentrix Secure Gatekeeper v3.0
+    </div>
+  </div>
+
+  <!-- STAGE 2: TOUCH VERIFICATION -->
+  <div id="stage-2" class="stage">
+    <div class="w-full text-center mb-8">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs tracking-wider uppercase mb-3">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span> Security Gate 02
+      </div>
+      <h2 class="text-2xl font-bold tracking-tight text-white">TOUCH VERIFICATION</h2>
+      <p class="text-xs text-gray-400 mt-1">Press and hold touch ring for 2 seconds</p>
+    </div>
+
+    <div class="flex flex-col items-center justify-center my-auto">
+      <div class="scanner-orb" id="scanner-orb">
+        <svg class="ring-progress-svg">
+          <circle class="ring-progress-circle" cx="86" cy="86" r="80" stroke-width="4" fill="transparent"/>
+        </svg>
+        <svg class="scanner-svg-icon" viewBox="0 0 24 24">
+          <path d="M17.81 4.47c-.08 0-.16-.02-.23-.06C15.66 3.42 14 3 12.01 3c-1.98 0-3.86.47-5.57 1.41-.24.13-.54.04-.68-.2-.13-.24-.04-.55.2-.68C7.82 2.52 9.86 2 12.01 2c2.13 0 3.99.47 6.03 1.52.25.13.34.43.21.67-.09.18-.26.28-.44.28zM3.5 9.72c-.1 0-.2-.03-.29-.09-.23-.16-.28-.47-.12-.7.99-1.4 2.25-2.5 3.75-3.27C9.98 4.04 14 4.03 17.15 5.65c1.5.77 2.76 1.86 3.75 3.25.16.22.11.54-.12.7-.23.16-.54.11-.7-.12-.89-1.25-2.01-2.22-3.35-2.91-2.83-1.45-6.42-1.44-9.33.02-1.35.68-2.48 1.65-3.37 2.91-.12.18-.32.28-.52.28zM2.08 15.65c-.14 0-.27-.06-.37-.17-.19-.21-.17-.53.04-.72 1.34-1.2 3.12-1.85 5.12-1.85 3.96 0 7.42 2.37 8.93 6.01.07.16.03.35-.1.48-.13.13-.32.17-.48.1-.55-.25-1.13-.38-1.74-.38-2.32 0-4.47 1.58-5.17 3.82-.08.26-.36.41-.62.33-.26-.08-.41-.36-.33-.62.82-2.61 3.32-4.47 6.07-4.47.45 0 .89.09 1.32.25-1.2-2.9-3.95-4.82-7.14-4.82-1.63 0-3.09.52-4.17 1.49-.22.19-.53.17-.72-.04z"/>
+        </svg>
+      </div>
+
+      <p id="touch-status-desc" class="text-sm font-medium text-gray-300 mt-8 tracking-wide">
+        HOLD TO VERIFY
+      </p>
+    </div>
+
+    <div class="text-center text-[10px] text-gray-500 tracking-widest uppercase">
+      Encrypted Biometric Check
+    </div>
+  </div>
+
+  <!-- STAGE 3: DASHBOARD -->
+  <div id="stage-3" class="stage justify-start overflow-y-auto pt-2 pb-6">
+    <div class="w-full text-center mb-6">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs tracking-wider uppercase mb-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Verified Session Active
+      </div>
+      <h1 class="text-xl font-extrabold tracking-wider text-white uppercase">WELCOME TO PLAYCENTRIX</h1>
+      <p class="text-xs text-cyan-400 font-mono tracking-widest mt-0.5">SECURE ADMIN TERMINAL v3.0</p>
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="w-full grid grid-cols-2 gap-3.5 mb-4">
+      
+      <!-- Control Apps -->
+      <div class="dash-card liquid-glass p-4 flex flex-col justify-between h-32 cursor-pointer" style="animation-delay: 0.1s;" onclick="openModal('controlApps')">
+        <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-lg">
+          ⚡
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Control Apps</h3>
+          <p class="text-[10px] text-gray-400 mt-0.5">Manage runtime & servers</p>
+        </div>
+      </div>
+
+      <!-- Transfer Ownership -->
+      <div class="dash-card liquid-glass p-4 flex flex-col justify-between h-32 cursor-pointer" style="animation-delay: 0.2s;" onclick="openModal('changeOwner')">
+        <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-lg">
+          👤
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Ownership</h3>
+          <p class="text-[10px] text-gray-400 mt-0.5">Re-assign master keys</p>
+        </div>
+      </div>
+
+      <!-- Backup / Runtime -->
+      <div class="dash-card liquid-glass p-4 flex flex-col justify-between h-32 cursor-pointer" style="animation-delay: 0.3s;" onclick="openModal('accessBackup')">
+        <div class="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-lg">
+          ☁️
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Backup / Runtime</h3>
+          <p class="text-[10px] text-gray-400 mt-0.5">Emergency nodes</p>
+        </div>
+      </div>
+
+      <!-- Storage Purge -->
+      <div class="dash-card liquid-glass p-4 flex flex-col justify-between h-32 cursor-pointer" style="animation-delay: 0.4s;" onclick="openModal('advancedStorage')">
+        <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-lg">
+          💾
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Storage Purge</h3>
+          <p class="text-[10px] text-gray-400 mt-0.5">Clear local cache</p>
+        </div>
+      </div>
+
+      <!-- Reveal Secrets -->
+      <div class="dash-card liquid-glass p-4 flex flex-col justify-between h-32 cursor-pointer" style="animation-delay: 0.5s;" onclick="openModal('revealSecrets')">
+        <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg">
+          👁️
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Reveal Secrets</h3>
+          <p class="text-[10px] text-gray-400 mt-0.5">Classified Level 4 vault</p>
+        </div>
+      </div>
+
+      <!-- Delete Playcentrix -->
+      <div class="dash-card liquid-glass p-4 flex flex-col justify-between h-32 cursor-pointer border-red-500/30" style="animation-delay: 0.6s;" onclick="openModal('deletePX')">
+        <div class="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 text-lg">
+          🔥
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-red-400">Delete Core</h3>
+          <p class="text-[10px] text-red-300/60 mt-0.5">System destruction</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Status Bar -->
+    <div class="w-full liquid-glass px-4 py-3 flex items-center justify-between text-xs text-gray-400 mt-auto">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-mono text-gray-300">ADMIN ACTIVE</span>
+      </div>
+      <span class="text-[10px] font-mono text-gray-500">KEY: **** VERIFIED</span>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODAL DIALOG CONTAINER -->
+<div id="modal-backdrop" class="modal-backdrop">
+  <div class="modal-card liquid-glass p-6 text-center relative">
+    <button onclick="closeModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 text-gray-300 hover:text-white flex items-center justify-center text-sm font-bold">✕</button>
+    
+    <h3 id="modal-title" class="text-lg font-bold text-white mb-4">Modal Title</h3>
+    <div id="modal-body" class="space-y-3"></div>
+  </div>
+</div>
+
+<script>
+// PRELOAD AUDIO IMMEDIATELY ON LOAD
+const introAudio = new Audio('MainIntro.mp3');
+introAudio.preload = 'auto';
+introAudio.loop = false;
+
+// Web Audio API Fallback Synth if mp3 fails or doesn't exist locally
+let audioCtx = null;
+function playAudioFallback() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    audioCtx = new AudioContext();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 1.5);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 3.0);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 3.0);
+  } catch(e) {
+    console.log("Audio fallback error:", e);
+  }
+}
+
+function startMainIntroAudio() {
+  introAudio.play().catch(err => {
+    console.log("MainIntro_Temp_1.mp3 auto-play notice (playing fallback):", err);
+    playAudioFallback();
+  });
+}
+
+// DYNAMIC NEURAL CANVAS BG
+const canvas = document.getElementById('neural-canvas');
+const ctx = canvas.getContext('2d');
+let width, height, particles = [];
+
+function resizeCanvas() {
+  width = canvas.width = window.innerWidth;
+  height = canvas.height = window.innerHeight;
+  particles = [];
+  const count = Math.floor((width * height) / 18000);
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      radius: Math.random() * 2 + 1
+    });
+  }
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function animateCanvas() {
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = 'rgba(0, 242, 254, 0.6)';
+  ctx.strokeStyle = 'rgba(0, 242, 254, 0.08)';
+
+  for (let i = 0; i < particles.length; i++) {
+    let p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0 || p.x > width) p.vx *= -1;
+    if (p.y < 0 || p.y > height) p.vy *= -1;
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    for (let j = i + 1; j < particles.length; j++) {
+      let p2 = particles[j];
+      let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+      if (dist < 130) {
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(animateCanvas);
+}
+animateCanvas();
+
+// DISABLE ZOOM & ACCIDENTAL DOUBLE TAP
+document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
+document.addEventListener('gestureend', function(e) { e.preventDefault(); });
+
+let lastTouchEnd = 0;
+document.addEventListener('touchend', function(e) {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) {
+    e.preventDefault();
+  }
+  lastTouchEnd = now;
+}, false);
+
+function hapticFeedback(pattern = [15]) {
+  if (navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch(e){}
+  }
+}
+
+// STAGE 1 SLIDER LOGIC
+const s1 = document.getElementById('s1'), f1 = document.getElementById('fill-1'), t1 = document.getElementById('thumb-1'), v1 = document.getElementById('s1-val');
+const s2 = document.getElementById('s2'), f2 = document.getElementById('fill-2'), t2 = document.getElementById('thumb-2'), v2 = document.getElementById('s2-val');
+const s3 = document.getElementById('s3'), f3 = document.getElementById('fill-3'), t3 = document.getElementById('thumb-3'), v3 = document.getElementById('s3-val');
+
+function updateSlider(s, f, t, v) {
+  const val = s.value;
+  f.style.width = val + '%';
+  t.style.left = `calc(${val}% - ${val * 0.44}px)`;
+  v.textContent = val + '%';
+
+  if (val == 100) {
+    t.style.background = '#00ff88';
+    t.style.color = '#000';
+    t.innerText = '✓';
+    hapticFeedback([20]);
+  } else {
+    t.style.background = '#ffffff';
+    t.style.color = '#0f172a';
+    t.innerText = '❯';
+  }
+  checkStage1Completion();
+}
+
+[ [s1,f1,t1,v1], [s2,f2,t2,v2], [s3,f3,t3,v3] ].forEach(arr => {
+  arr[0].addEventListener('input', () => updateSlider(arr[0], arr[1], arr[2], arr[3]));
+});
+
+function checkStage1Completion() {
+  if (s1.value == 100 && s2.value == 100 && s3.value == 100) {
+    hapticFeedback([30, 50, 30]);
+    setTimeout(() => {
+      document.getElementById('stage-1').classList.remove('active');
+      document.getElementById('stage-2').classList.add('active');
+    }, 350);
+  }
+}
+
+// STAGE 2 SCANNER LOGIC
+const scannerOrb = document.getElementById('scanner-orb');
+const progressCircle = document.querySelector('.ring-progress-circle');
+const touchDesc = document.getElementById('touch-status-desc');
+let scanTimer = null;
+let scanProgress = 0;
+let progressInterval = null;
+
+function startTouchVerification(e) {
+  if (e) e.preventDefault();
+  scannerOrb.classList.add('active-scan');
+  touchDesc.textContent = "VERIFYING DEVICE TOUCH";
+  touchDesc.className = "text-sm font-medium text-cyan-400 mt-8 tracking-wide animate-pulse";
+  
+  scanProgress = 0;
+  const maxOffset = 520;
+  
+  hapticFeedback([20]);
+
+  progressInterval = setInterval(() => {
+    scanProgress += 2.5; // reaches 100% in 2000ms
+    const offset = maxOffset - (maxOffset * (scanProgress / 100));
+    progressCircle.style.strokeDashoffset = Math.max(0, offset);
+
+    if (scanProgress >= 100) {
+      clearInterval(progressInterval);
+      completeTouchVerification();
+    }
+  }, 50);
+}
+
+function stopTouchVerification() {
+  if (scanProgress < 100) {
+    clearInterval(progressInterval);
+    scannerOrb.classList.remove('active-scan');
+    progressCircle.style.strokeDashoffset = 520;
+    touchDesc.textContent = "HOLD TO VERIFY";
+    touchDesc.className = "text-sm font-medium text-gray-300 mt-8 tracking-wide";
+  }
+}
+
+function completeTouchVerification() {
+  scannerOrb.classList.remove('active-scan');
+  scannerOrb.classList.add('success-scan');
+  touchDesc.textContent = "VERIFICATION SUCCESSFUL";
+  touchDesc.className = "text-sm font-bold text-emerald-400 mt-8 tracking-wide";
+  
+  hapticFeedback([40, 60, 100]);
+
+  // Purge 6776 code from local storage as per spec
+  localStorage.removeItem('6776');
+  console.log("6776 code purged from local storage.");
+
+  // IMMEDIATE AUDIO TRIGGER inside touch gesture context!
+  startMainIntroAudio();
+
+  // Transition to Stage 2.5 (Pitch Black Authorization for 5.5s)
+  setTimeout(() => {
+    document.getElementById('stage-2').classList.remove('active');
+    runAuthorizationSequence();
+  }, 600);
+}
+
+scannerOrb.addEventListener('mousedown', startTouchVerification);
+scannerOrb.addEventListener('touchstart', startTouchVerification, {passive: false});
+window.addEventListener('mouseup', stopTouchVerification);
+window.addEventListener('touchend', stopTouchVerification);
+
+// STAGE 2.5: AUTHORIZATION PRELOADER (5.5 Seconds)
+function runAuthorizationSequence() {
+  const authOverlay = document.getElementById('auth-overlay');
+  const authStatus = document.getElementById('auth-status-text');
+  const authProgressBar = document.getElementById('auth-progress-bar');
+  
+  authOverlay.classList.add('active');
+
+  const messages = [
+    { time: 0, text: "Verifying User" },
+    { time: 1500, text: "Rechecking Codes" },
+    { time: 3000, text: "Creating Profile" },
+    { time: 4500, text: "ACCESS GRANTED WELCOME" }
+  ];
+
+  messages.forEach(m => {
+    setTimeout(() => {
+      authStatus.textContent = m.text;
+      hapticFeedback([15]);
+    }, m.time);
+  });
+
+  // Progress Bar Animation to 100% over 5.5s
+  let elapsed = 0;
+  const interval = setInterval(() => {
+    elapsed += 50;
+    const pct = Math.min(100, (elapsed / 5500) * 100);
+    authProgressBar.style.width = pct + '%';
+
+    if (elapsed >= 5500) {
+      clearInterval(interval);
+      triggerGreenBurstAndDashboard();
+    }
+  }, 50);
+}
+
+// STAGE 3: GREEN BURST AND DASHBOARD WELCOME
+function triggerGreenBurstAndDashboard() {
+  const authOverlay = document.getElementById('auth-overlay');
+  const burst = document.getElementById('green-burst-effect');
+  
+  // Fade out dark screen
+  authOverlay.classList.remove('active');
+
+  // Trigger burst
+  burst.classList.add('burst');
+  hapticFeedback([60, 120, 60]);
+
+  setTimeout(() => {
+    burst.classList.remove('burst');
+  }, 900);
+
+  // Activate Stage 3
+  document.getElementById('stage-3').classList.add('active');
+}
+
+// MODAL MANAGEMENT
+const modalBackdrop = document.getElementById('modal-backdrop');
+const modalTitle = document.getElementById('modal-title');
+const modalBody = document.getElementById('modal-body');
+let currentOwnerName = "Admin";
+let inputPasscode = "";
+
+function openModal(action) {
+  modalBackdrop.classList.add('open');
+  modalBody.innerHTML = "";
+  inputPasscode = "";
+
+  switch(action) {
+    case "controlApps":
+      modalTitle.textContent = "System Apps Control";
+      ["Playcentrix Runtime", "Playcentrix Toolbox", "Playcentrix Bank", "Playcentrix Servers"].forEach(app => {
+        const btn = document.createElement('button');
+        btn.className = "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors";
+        btn.textContent = app;
+        btn.onclick = () => showOnOff(app);
+        modalBody.appendChild(btn);
+      });
+      break;
+
+    case "changeOwner":
+      modalTitle.textContent = "Transfer Ownership";
+      modalBody.innerHTML = `
+        <input type="text" id="newOwnerInput" placeholder="Enter New Owner Name" class="w-full py-3 px-4 rounded-xl bg-black/50 border border-white/20 text-center text-white focus:outline-none focus:border-cyan-400 font-medium mb-3">
+        <button onclick="submitNewOwner()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white shadow-lg">Initiate Transfer</button>
+      `;
+      break;
+
+    case "accessBackup":
+      modalTitle.textContent = "Backup & Runtime";
+      ["Initialize Backup Protocol", "Engage Emergency Runtime"].forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = "w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-colors mb-2";
+        btn.textContent = opt;
+        btn.onclick = () => promptFourDigit(opt);
+        modalBody.appendChild(btn);
+      });
+      break;
+
+    case "advancedStorage":
+      modalTitle.textContent = "Storage Purge";
+      modalBody.innerHTML = `
+        <p class="text-xs text-gray-300 mb-4">Purge all local cache entries and temporary overrides instantly.</p>
+        <button onclick="promptFourDigit('Purge Local Storage')" class="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">Authorize Storage Purge</button>
+      `;
+      break;
+
+    case "revealSecrets":
+      modalTitle.textContent = "Classified Vault";
+      modalBody.innerHTML = `
+        <p class="text-xs text-gray-400 mb-4">Enter 4-digit master passcode to decrypt secret vault.</p>
+        <button onclick="promptFourDigit('Reveal Secrets')" class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold">Enter Security Code</button>
+      `;
+      break;
+
+    case "deletePX":
+      modalTitle.textContent = "Delete Playcentrix";
+      modalBody.innerHTML = `
+        <p class="text-xs text-red-400 mb-3">WARNING: Irreversible core system deletion protocol.</p>
+        <input type="text" id="deleteConfirmInput" placeholder="Type CONFIRM" class="w-full py-3 px-4 rounded-xl bg-black/60 border border-red-500/30 text-center text-red-400 focus:outline-none focus:border-red-500 font-bold uppercase mb-3">
+        <button onclick="submitDelete()" class="w-full py-3 rounded-xl bg-red-600 text-white font-bold shadow-lg shadow-red-600/30">VERIFY TERMINATION</button>
+      `;
+      break;
+  }
+}
+
+function closeModal() {
+  modalBackdrop.classList.remove('open');
+}
+
+function showOnOff(appName) {
+  modalBody.innerHTML = `
+    <p class="text-xs text-cyan-400 font-mono mb-3">TARGET: ${appName}</p>
+    <button onclick="promptFourDigit('${appName} ACTIVATE')" class="w-full py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold mb-2">ACTIVATE</button>
+    <button onclick="promptFourDigit('${appName} DEACTIVATE')" class="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 font-bold">DEACTIVATE</button>
+  `;
+}
+
+function submitNewOwner() {
+  const val = document.getElementById('newOwnerInput').value.trim();
+  if (!val) return;
+  currentOwnerName = val;
+  promptFourDigit("Transfer Ownership to " + val);
+}
+
+function submitDelete() {
+  const val = document.getElementById('deleteConfirmInput').value.trim();
+  if (val.toUpperCase() === "CONFIRM") {
+    promptFourDigit("Delete Playcentrix Core");
+  } else {
+    alert("Please type 'CONFIRM' to proceed.");
+  }
+}
+
+/* 4-DIGIT SECURITY NUMPAD LOGIC */
+function promptFourDigit(actionTitle) {
+  inputPasscode = "";
+  modalTitle.textContent = "Security Code Required";
+  modalBody.innerHTML = `
+    <div class="text-xs text-gray-400 mb-2">${actionTitle}</div>
+    <div id="passcode-dots" class="flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400">••••</div>
+    <div class="grid grid-cols-3 gap-2 mt-4">
+      ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="numpad-btn" onclick="pressDigit('${n}', '${actionTitle}')">${n}</button>`).join('')}
+      <button class="numpad-btn text-gray-400 text-sm" onclick="clearDigit()">CLEAR</button>
+      <button class="numpad-btn" onclick="pressDigit('0', '${actionTitle}')">0</button>
+      <button class="numpad-btn text-cyan-400 text-sm" onclick="verifyPasscode('${actionTitle}')">OK</button>
+    </div>
+  `;
+}
+
+function pressDigit(num, actionTitle) {
+  if (inputPasscode.length < 4) {
+    inputPasscode += num;
+    hapticFeedback([10]);
+    updatePasscodeDots();
+    if (inputPasscode.length === 4) {
+      setTimeout(() => verifyPasscode(actionTitle), 150);
+    }
+  }
+}
+
+function clearDigit() {
+  inputPasscode = "";
+  updatePasscodeDots();
+}
+
+function updatePasscodeDots() {
+  const dotsContainer = document.getElementById('passcode-dots');
+  if (!dotsContainer) return;
+  let display = "";
+  for (let i = 0; i < 4; i++) {
+    display += i < inputPasscode.length ? "● " : "○ ";
+  }
+  dotsContainer.textContent = display.trim();
+}
+
+function verifyPasscode(actionTitle) {
+  if (inputPasscode === "4321") {
+    hapticFeedback([40, 80]);
+    sendTelegramNotice(`✅ Success: ${actionTitle} (Code: 4321)`);
+
+    if (actionTitle === "Reveal Secrets") {
+      // PLANT SECRET VAULT
+      modalTitle.textContent = "Classified Secrets";
+      modalBody.innerHTML = `
+        <div class="py-4 text-center space-y-3">
+          <div class="text-4xl animate-bounce">🌿👀🌿</div>
+          <h4 class="text-lg font-bold text-emerald-400">The Epicstream Destruction Plan</h4>
+          <p class="text-xs text-gray-300 leading-relaxed px-2">
+            Files: All Documents and Files with Proof are stord in PCX Vault!<br><br>
+            We have collected all the required files of epicstream and accured epicstream-alike and available usernames and domains where available and further plans to destory epicstream asap.
+          </p>
+          <div class="text-[10px] text-cyan-400 font-mono pt-2">[ Level 4 Secrets Remapped ]</div>
+        </div>
+      `;
+    } else if (actionTitle.includes("Purge Local Storage")) {
+      localStorage.clear();
+      sessionStorage.clear();
+      modalTitle.textContent = "Storage Purged";
+      modalBody.innerHTML = `<p class="text-emerald-400 text-sm py-4">All cached items and local variables cleared successfully.</p>`;
+      setTimeout(closeModal, 1500);
+    } else {
+      modalTitle.textContent = "Action Authorized";
+      modalBody.innerHTML = `<p class="text-emerald-400 text-sm py-4">Protocol [${actionTitle}] executed successfully.</p>`;
+      setTimeout(closeModal, 1400);
+    }
+  } else {
+    hapticFeedback([100, 50, 100]);
+    sendTelegramNotice(`❌ Denied: ${actionTitle} Attempted: ${inputPasscode}`);
+    const dotsContainer = document.getElementById('passcode-dots');
+    if (dotsContainer) {
+      dotsContainer.textContent = "DENIED";
+      dotsContainer.className = "text-red-500 font-bold text-xl py-2";
+    }
+    setTimeout(() => {
+      inputPasscode = "";
+      updatePasscodeDots();
+      if (dotsContainer) dotsContainer.className = "flex justify-center gap-3 text-2xl font-mono py-2 text-cyan-400";
+    }, 1200);
+  }
+}
+
+// TELEGRAM TELEMETRY
+function sendTelegramNotice(message) {
+  const token = "7953958473:AAHhzcXRJ5jeCXEefFbphuWxv98muliZKt4";
+  const chat_id = "1561851616";
+  const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(message)}`;
+  
+  fetch(url).catch(err => console.log("Telegram dispatch offline"));
+}
+</script>
+</body>
+</html>
