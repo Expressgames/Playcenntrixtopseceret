@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Playcentrix | Signature Verification</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #050505;
+      background-image: radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.1), transparent 60%);
+      color: #ffffff;
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Glassmorphism Panel */
+    .glass-panel {
+      background: rgba(18, 18, 22, 0.65);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 28px;
+      box-shadow: 0 40px 80px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* Canvas Frame with Glowing RGBA White Border */
+    .canvas-container {
+      position: relative;
+      background: rgba(10, 10, 12, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 0 25px rgba(255, 255, 255, 0.08), 
+                  inset 0 1px 1px rgba(255, 255, 255, 0.2);
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    /* State Visual Feedback */
+    .status-success {
+      border-color: rgba(16, 185, 129, 0.8) !important;
+      box-shadow: 0 0 35px rgba(16, 185, 129, 0.4) !important;
+    }
+
+    .status-error {
+      border-color: rgba(244, 63, 94, 0.8) !important;
+      box-shadow: 0 0 35px rgba(244, 63, 94, 0.4) !important;
+      animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    @keyframes shake {
+      10%, 90% { transform: translate3d(-2px, 0, 0); }
+      20%, 80% { transform: translate3d(4px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+      40%, 60% { transform: translate3d(8px, 0, 0); }
+    }
+  </style>
+</head>
+<body class="p-4">
+
+  <div class="glass-panel w-full max-w-md p-6 sm:p-8 flex flex-col gap-6">
+    <header class="text-center">
+      <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+        Playcentrix
+      </h1>
+      <p class="text-xs font-semibold tracking-widest text-gray-400 uppercase mt-1">
+        Signature Verification
+      </p>
+    </header>
+
+    <div class="canvas-container h-64 w-full relative" id="canvasWrapper">
+      <canvas id="sigCanvas" class="w-full h-full block cursor-crosshair touch-none"></canvas>
+
+      <!-- Audio Unlock & Start Overlay -->
+      <div id="audioOverlay" class="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center z-20 transition-opacity duration-300">
+        <div class="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center mb-3 text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+        </div>
+        <h2 class="text-sm font-semibold text-white mb-1">Signature Verification</h2>
+        <p class="text-xs text-gray-400 mb-4 max-w-[220px]">iOS & Android require a touch gesture to activate acoustic effects.</p>
+        <button id="enableAudioBtn" class="px-5 py-2.5 bg-white text-black font-semibold text-xs rounded-full shadow-lg hover:bg-gray-200 active:scale-95 transition-all">
+          Tap to Verify Now
+        </button>
+      </div>
+    </div>
+
+    <!-- Instructions / Status Footer -->
+    <div class="flex justify-between items-center text-xs text-gray-400 px-1">
+      <span id="statusText">Sign inside the box to verify</span>
+      <span id="audioIndicator" class="flex items-center gap-1.5 opacity-60">
+        <span class="w-2 h-2 rounded-full bg-red-500" id="audioDot"></span>
+        <span id="audioModeLabel">Muted</span>
+      </span>
+    </div>
+  </div>
+
+  <script>
+    const MASTER_SIG = {
+      "meta": { "version": "2.5", "configuredTolerance": "82.5%" },
+      "metrics": {
+        "strokeCount": 1,
+        "pointCount": 26,
+        "totalDurationMs": 439,
+        "aspectRatio": 1.128,
+        "avgVelocity": 6.819
+      },
+      "trajectory": [
+        {"nx": 0.6067, "ny": 0}, {"nx": 0.6247, "ny": 0.0406}, {"nx": 0.617, "ny": 0.1304},
+        {"nx": 0.5681, "ny": 0.2754}, {"nx": 0.4987, "ny": 0.4406}, {"nx": 0.4165, "ny": 0.6087},
+        {"nx": 0.3316, "ny": 0.7681}, {"nx": 0.2494, "ny": 0.8928}, {"nx": 0.1799, "ny": 0.971},
+        {"nx": 0.1208, "ny": 0.9855}, {"nx": 0.0694, "ny": 0.9652}, {"nx": 0.0231, "ny": 0.8667},
+        {"nx": 0, "ny": 0.7362}, {"nx": 0, "ny": 0.5884}, {"nx": 0.0206, "ny": 0.4609},
+        {"nx": 0.0488, "ny": 0.3826}, {"nx": 0.0591, "ny": 0.3623}, {"nx": 0.0746, "ny": 0.3623},
+        {"nx": 0.1337, "ny": 0.4116}, {"nx": 0.2339, "ny": 0.4928}, {"nx": 0.3676, "ny": 0.6},
+        {"nx": 0.5244, "ny": 0.7043}, {"nx": 0.6967, "ny": 0.7913}, {"nx": 0.8483, "ny": 0.8725},
+        {"nx": 0.964, "ny": 0.9536}, {"nx": 1, "ny": 1}
+      ]
+    };
+
+    const canvas = document.getElementById('sigCanvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvasWrapper');
+    const audioOverlay = document.getElementById('audioOverlay');
+    const enableAudioBtn = document.getElementById('enableAudioBtn');
+    const audioDot = document.getElementById('audioDot');
+    const audioModeLabel = document.getElementById('audioModeLabel');
+    const statusText = document.getElementById('statusText');
+
+    let strokes = [];
+    let currentStroke = [];
+    let isDrawing = false;
+    let startTime = 0;
+    let verifyTimeout = null;
+    let verificationState = 'idle';
+    let dpr = window.devicePixelRatio || 1;
+    let stopAudioTimeout = null;
+
+    function resizeCanvas() {
+      const rect = wrapper.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let audioCtx = null;
+    let subOscPrimary = null;
+    let subOscHarmonic = null;
+    let deepBassFilter = null;
+    let masterGain = null;
+    let isAudioUnlocked = false;
+    let isBassActive = false;
+
+    const BASS_MAX_GAIN = 0.70; // 80% Bass Output
+    const FADE_DURATION = 0.2; // Exact 0.2 second fade in / fade out
+
+    function initAudioEngine() {
+      if (isAudioUnlocked && audioCtx) {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        return;
+      }
+
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+
+        // 1. Primary Ultra-Sub Oscillator (Pure Sine at 38Hz for room-shaking low end)
+        subOscPrimary = audioCtx.createOscillator();
+        subOscPrimary.type = 'sine';
+        subOscPrimary.frequency.setValueAtTime(2500, audioCtx.currentTime);
+
+        // 2. Harmonic Sub-Bass Oscillator (Warm Sine at 76Hz to prevent speaker cancellation)
+        subOscHarmonic = audioCtx.createOscillator();
+        subOscHarmonic.type = 'sine';
+        subOscHarmonic.frequency.setValueAtTime(76, audioCtx.currentTime);
+
+        // Heavy Lowpass Filter cutting out all highs/mids completely (>90Hz)
+        deepBassFilter = audioCtx.createBiquadFilter();
+        deepBassFilter.type = 'lowpass';
+        deepBassFilter.frequency.setValueAtTime(90, audioCtx.currentTime);
+        deepBassFilter.Q.setValueAtTime(2.5, audioCtx.currentTime);
+
+        // Master Gain initialized to 0
+        masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+        // Connect audio graph
+        subOscPrimary.connect(deepBassFilter);
+        subOscHarmonic.connect(deepBassFilter);
+        deepBassFilter.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
+
+        subOscPrimary.start();
+        subOscHarmonic.start();
+
+        audioCtx.resume().then(() => {
+          isAudioUnlocked = true;
+          audioOverlay.style.opacity = '0';
+          setTimeout(() => audioOverlay.style.display = 'none', 300);
+
+          audioDot.classList.remove('bg-red-500');
+          audioDot.classList.add('bg-emerald-400');
+          audioModeLabel.textContent = 'Audio Active';
+        });
+
+      } catch (e) {
+        console.warn('Web Audio API Initialization Error:', e);
+      }
+    }
+
+    function triggerBassFadeIn() {
+      if (!audioCtx || !isAudioUnlocked) return;
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      if (stopAudioTimeout) {
+        clearTimeout(stopAudioTimeout);
+        stopAudioTimeout = null;
+      }
+
+      const now = audioCtx.currentTime;
+
+      if (!isBassActive) {
+        isBassActive = true;
+        // Smooth 0.2 second fade in to 80% volume
+        masterGain.gain.cancelScheduledValues(now);
+        masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+        masterGain.gain.linearRampToValueAtTime(BASS_MAX_GAIN, now + FADE_DURATION);
+      }
+
+      // Automatically trigger fade out if drawing stops or pauses for >200ms
+      stopAudioTimeout = setTimeout(() => {
+        triggerBassFadeOut();
+      }, 200);
+    }
+
+    function triggerBassFadeOut() {
+      if (!audioCtx || !isAudioUnlocked || !isBassActive) return;
+
+      const now = audioCtx.currentTime;
+      isBassActive = false;
+
+      // Smooth 0.2 second fade out to completely muted
+      masterGain.gain.cancelScheduledValues(now);
+      masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+      masterGain.gain.linearRampToValueAtTime(0.0001, now + FADE_DURATION);
+    }
+
+    function getCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top,
+        t: Date.now() - startTime
+      };
+    }
+
+    function startDrawing(e) {
+      e.preventDefault();
+      if (verificationState === 'success') return;
+
+      initAudioEngine();
+      clearTimeout(verifyTimeout);
+
+      if (strokes.length === 0 && currentStroke.length === 0) {
+        startTime = Date.now();
+      }
+
+      isDrawing = true;
+      verificationState = 'drawing';
+      statusText.textContent = 'Drawing...';
+      const pt = getCoords(e);
+      pt.t = Date.now() - startTime;
+      currentStroke = [pt];
+
+      triggerBassFadeIn();
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+
+      const pt = getCoords(e);
+      triggerBassFadeIn();
+      currentStroke.push(pt);
+    }
+
+    function stopDrawing(e) {
+      if (!isDrawing) return;
+      isDrawing = false;
+      triggerBassFadeOut();
+
+      if (currentStroke.length > 1) {
+        strokes.push([...currentStroke]);
+      }
+      currentStroke = [];
+
+      statusText.textContent = 'Verifying signature...';
+      verifyTimeout = setTimeout(verifySignature, 1000);
+    }
+
+    enableAudioBtn.addEventListener('click', initAudioEngine);
+    enableAudioBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      initAudioEngine();
+    }, { passive: false });
+
+    canvas.addEventListener('touchstart', startDrawing, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
+    canvas.addEventListener('touchend', stopDrawing, { passive: false });
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    window.addEventListener('mouseup', stopDrawing);
+
+    function renderFrame() {
+      const rect = wrapper.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const allStrokes = [...strokes, ...(currentStroke.length ? [currentStroke] : [])];
+      const currentTime = Date.now() - startTime;
+
+      allStrokes.forEach(stroke => {
+        if (stroke.length < 2) return;
+
+        for (let i = 1; i < stroke.length; i++) {
+          const p1 = stroke[i - 1];
+          const p2 = stroke[i];
+          const age = currentTime - p2.t;
+
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (verificationState === 'success') {
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 3.5;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#10b981';
+          } else if (verificationState === 'error') {
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 3.5;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#f43f5e';
+          } else {
+            if (age < 500) {
+              const intensity = 1 - (age / 500);
+              ctx.strokeStyle = `rgba(255, ${Math.floor(255 * intensity)}, ${Math.floor(255 * intensity)}, 1)`;
+              ctx.lineWidth = 3 + (2.5 * intensity);
+              ctx.shadowBlur = 12 * intensity;
+              ctx.shadowColor = `rgba(239, 68, 68, ${intensity})`;
+            } else {
+              ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+              ctx.lineWidth = 3;
+              ctx.shadowBlur = 0;
+            }
+          }
+          ctx.stroke();
+        }
+      });
+
+      requestAnimationFrame(renderFrame);
+    }
+    renderFrame();
+
+    function DTW(seq1, seq2) {
+      const n = seq1.length, m = seq2.length;
+      const dtw = Array.from({ length: n + 1 }, () => Array(m + 1).fill(Infinity));
+      dtw[0][0] = 0;
+
+      for (let i = 1; i <= n; i++) {
+        for (let j = 1; j <= m; j++) {
+          const cost = Math.hypot(seq1[i - 1].nx - seq2[j - 1].nx, seq1[i - 1].ny - seq2[j - 1].ny);
+          dtw[i][j] = cost + Math.min(dtw[i - 1][j], dtw[i][j - 1], dtw[i - 1][j - 1]);
+        }
+      }
+      return dtw[n][m] / Math.max(n, m);
+    }
+
+    function verifySignature() {
+      let rawPoints = [];
+      strokes.forEach(s => rawPoints = rawPoints.concat(s));
+
+      if (rawPoints.length < 5) {
+        rejectSignature();
+        return;
+      }
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      rawPoints.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      });
+
+      const w = maxX - minX || 1;
+      const h = maxY - minY || 1;
+      const testAspect = w / h;
+
+      const normalizedTest = rawPoints.map(p => ({
+        nx: (p.x - minX) / w,
+        ny: (p.y - minY) / h
+      }));
+
+      const aspectDiff = Math.abs(MASTER_SIG.metrics.aspectRatio - testAspect);
+      const aspectScore = Math.max(0, 1 - (aspectDiff / MASTER_SIG.metrics.aspectRatio));
+
+      const dtwDistance = DTW(MASTER_SIG.trajectory, normalizedTest);
+      const shapeScore = Math.max(0, 1 - (dtwDistance * 2.1));
+
+      const totalScore = (shapeScore * 0.75) + (aspectScore * 0.25);
+
+      if (totalScore >= 0.70) {
+        acceptSignature();
+      } else {
+        rejectSignature();
+      }
+    }
+
+    function acceptSignature() {
+      verificationState = 'success';
+      wrapper.classList.add('status-success');
+      statusText.textContent = 'Verified! Redirecting...';
+      statusText.classList.add('text-emerald-400');
+      setTimeout(() => {
+        window.location.href = 'admin.html';
+      }, 1000);
+    }
+
+    function rejectSignature() {
+      verificationState = 'error';
+      wrapper.classList.add('status-error');
+      statusText.textContent = 'Signature mismatch. Try again.';
+      statusText.classList.add('text-rose-400');
+      setTimeout(() => {
+        wrapper.classList.remove('status-error');
+        statusText.classList.remove('text-rose-400');
+        statusText.textContent = 'Sign inside the box to verify';
+        strokes = [];
+        startTime = 0;
+        verificationState = 'idle';
+      }, 1200);
+    }
+  </script>
+</body>
+</html>
