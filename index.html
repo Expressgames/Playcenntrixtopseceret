@@ -1,1 +1,778 @@
-hey
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Playcentrix Security Verification</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    :root {
+        --ios-bg: #030712;
+        --ios-card-bg: rgba(20, 24, 38, 0.72);
+        --ios-card-border: rgba(255, 255, 255, 0.12);
+        --ios-accent: #0A84FF;
+        --ios-accent-glow: rgba(10, 132, 255, 0.4);
+        --ios-success: #30D158;
+        --ios-success-glow: rgba(48, 209, 88, 0.45);
+        --ios-error: #FF453A;
+        --ios-key-bg: rgba(255, 255, 255, 0.08);
+        --ios-key-active: rgba(255, 255, 255, 0.28);
+        --ios-text-primary: #FFFFFF;
+        --ios-text-secondary: rgba(235, 235, 245, 0.68);
+        --ios-text-tertiary: rgba(235, 235, 245, 0.42);
+    }
+
+    /* Lock entire body to 100dvh to prevent any scrolling or zoom on iPhone */
+    html, body {
+        width: 100%;
+        height: 100dvh;
+        overflow: hidden;
+        position: fixed;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        background-color: var(--ios-bg);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* iOS 18 Ambient Glow Mesh */
+    .ambient-mesh {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background: 
+            radial-gradient(circle at 18% 18%, rgba(10, 132, 255, 0.25) 0%, transparent 45%),
+            radial-gradient(circle at 82% 82%, rgba(147, 51, 234, 0.22) 0%, transparent 50%),
+            radial-gradient(circle at 50% 50%, rgba(3, 7, 18, 0.88) 0%, #030712 100%);
+    }
+
+    /* Glassmorphism main card layout using flexible dynamic clamp spacing */
+    .glass-card {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        max-width: 410px;
+        height: 100dvh;
+        max-height: 100dvh;
+        background: var(--ios-card-bg);
+        backdrop-filter: blur(40px) saturate(200%);
+        -webkit-backdrop-filter: blur(40px) saturate(200%);
+        border: 1px solid var(--ios-card-border);
+        padding: clamp(12px, 2.5vh, 24px) clamp(16px, 4vw, 24px) calc(clamp(12px, 2.5vh, 20px) + env(safe-area-inset-bottom)) clamp(16px, 4vw, 24px);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (min-height: 680px) and (min-width: 420px) {
+        .glass-card {
+            height: auto;
+            max-height: 94dvh;
+            border-radius: 36px;
+            margin: auto;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+        }
+    }
+
+    /* Biometric header ring */
+    .ring-wrapper {
+        position: relative;
+        width: clamp(72px, 12vh, 92px);
+        height: clamp(72px, 12vh, 92px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    canvas#biometricCanvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+    }
+
+    .shield-badge {
+        position: relative;
+        z-index: 2;
+        width: clamp(46px, 7.5vh, 56px);
+        height: clamp(46px, 7.5vh, 56px);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35);
+        transition: all 0.35s ease;
+    }
+
+    /* Anti-OCR Captcha Container */
+    .challenge-card {
+        width: 100%;
+        background: rgba(10, 14, 26, 0.65);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: clamp(10px, 1.8vh, 14px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    canvas#captchaCanvas {
+        width: 100%;
+        height: clamp(52px, 8vh, 66px);
+        border-radius: 14px;
+        display: block;
+        background: #090d16;
+    }
+
+    /* Input Dots Box */
+    .pin-display-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        min-height: clamp(38px, 5.5vh, 46px);
+        padding: 4px 20px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: all 0.3s ease;
+    }
+
+    .pin-dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        border: 2px solid var(--ios-text-secondary);
+        background: transparent;
+        transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .pin-dot.filled {
+        background: var(--ios-text-primary);
+        border-color: var(--ios-text-primary);
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+        transform: scale(1.18);
+    }
+
+    .pin-dot.success {
+        background: var(--ios-success);
+        border-color: var(--ios-success);
+        box-shadow: 0 0 16px var(--ios-success-glow);
+        transform: scale(1.1);
+    }
+
+    .pin-dot.error {
+        background: var(--ios-error);
+        border-color: var(--ios-error);
+        box-shadow: 0 0 14px rgba(255, 69, 58, 0.7);
+    }
+
+    /* Tactical Responsive Numpad */
+    .keypad-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: clamp(8px, 1.5vh, 12px) clamp(12px, 4vw, 20px);
+        width: 100%;
+        max-width: 320px;
+        margin: 0 auto;
+    }
+
+    .key-btn {
+        width: clamp(54px, 8.2vh, 66px);
+        height: clamp(54px, 8.2vh, 66px);
+        border-radius: 50%;
+        background: var(--ios-key-bg);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--ios-text-primary);
+        font-size: clamp(1.35rem, 2.4vh, 1.65rem);
+        font-weight: 400;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        margin: 0 auto;
+        transition: background 0.12s ease, transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    }
+
+    .key-btn:active {
+        background: var(--ios-key-active);
+        transform: scale(0.91);
+    }
+
+    .key-btn span.subtext {
+        font-size: clamp(0.52rem, 1vh, 0.62rem);
+        letter-spacing: 1.5px;
+        font-weight: 600;
+        color: var(--ios-text-tertiary);
+        margin-top: -2px;
+        text-transform: uppercase;
+    }
+
+    .key-btn.action-btn {
+        font-size: clamp(0.85rem, 1.5vh, 0.95rem);
+        font-weight: 500;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        color: var(--ios-text-secondary);
+    }
+
+    .key-btn.action-btn:active {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+    }
+
+    /* iOS Precision Shake Animation */
+    .shake {
+        animation: ios-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    @keyframes ios-shake {
+        10%, 90% { transform: translate3d(-3px, 0, 0); }
+        20%, 80% { transform: translate3d(5px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-7px, 0, 0); }
+        40%, 60% { transform: translate3d(7px, 0, 0); }
+    }
+
+    /* Rotation effect for refresh button */
+    .spin-once {
+        animation: spin-anim 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes spin-anim {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .ios-spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        border-top-color: var(--ios-accent);
+        border-radius: 50%;
+        animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+</head>
+<body class="flex items-center justify-center">
+
+<!-- Ambient Mesh Background -->
+<div class="ambient-mesh"></div>
+
+<div class="glass-card" id="cardContainer">
+    
+    <!-- Top Header & Dynamic Ring -->
+    <div class="w-full flex flex-col items-center">
+        <!-- iOS Home Indicator bar for ultra-compact mobile -->
+        <div class="w-9 h-1 bg-white/20 rounded-full mb-2 md:hidden"></div>
+
+        <div class="ring-wrapper">
+            <canvas id="biometricCanvas"></canvas>
+            <div class="shield-badge" id="shieldBadge">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" id="shieldIcon">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    <path d="M12 8v4"></path>
+                    <path d="M12 16h.01"></path>
+                </svg>
+            </div>
+        </div>
+
+        <h1 class="text-base sm:text-lg font-semibold tracking-tight text-white mt-2">Playcentrix Verification</h1>
+        
+        <!-- Status Indicator Pill -->
+        <div class="flex items-center gap-1.5 mt-1 px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/10">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-[11px] text-white/70 font-medium">Quick Security Pass</span>
+        </div>
+    </div>
+
+    <!-- Math Challenge Scribbled Canvas Box -->
+    <div class="w-full my-auto py-1">
+        <div class="challenge-card">
+            <div class="w-full flex items-center justify-between text-[11px] font-medium text-white/60 px-1">
+                <span>Solve the visual equation</span>
+                <button onclick="refreshCaptcha()" id="refreshBtn" class="hover:text-white transition-colors flex items-center gap-1 text-[11px] text-blue-400 font-semibold active:opacity-60" title="Get New Code">
+                    <svg id="refreshSvg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                    New Code
+                </button>
+            </div>
+            
+            <canvas id="captchaCanvas"></canvas>
+            
+            <div class="text-[10px] sm:text-[11px] text-white/40 text-center font-normal">
+                Type the correct answer on the keypad below
+            </div>
+        </div>
+    </div>
+
+    <!-- Input Dots & Live Status Feedback -->
+    <div class="w-full flex flex-col items-center my-1">
+        <div class="pin-display-box" id="pinDisplay">
+            <div class="pin-dots-container flex gap-3" id="pinDots">
+                <!-- Dots generated dynamically based on answer length -->
+            </div>
+            <div id="verifyingSpinner" class="hidden">
+                <div class="ios-spinner"></div>
+            </div>
+        </div>
+        
+        <div id="statusMessage" class="text-xs font-medium text-white/50 h-5 mt-1.5 transition-all duration-200 text-center flex items-center gap-1.5">
+            <span>Enter code to authenticate</span>
+        </div>
+    </div>
+
+    <!-- iOS Numpad Keypad -->
+    <div class="keypad-grid mb-1">
+        <button class="key-btn" onclick="handleNumpadInput('1')">1<span class="subtext">&nbsp;</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('2')">2<span class="subtext">ABC</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('3')">3<span class="subtext">DEF</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('4')">4<span class="subtext">GHI</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('5')">5<span class="subtext">JKL</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('6')">6<span class="subtext">MNO</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('7')">7<span class="subtext">PQRS</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('8')">8<span class="subtext">TUV</span></button>
+        <button class="key-btn" onclick="handleNumpadInput('9')">9<span class="subtext">WXYZ</span></button>
+        <button class="key-btn action-btn" onclick="clearInput()">Clear</button>
+        <button class="key-btn" onclick="handleNumpadInput('0')">0<span class="subtext">+</span></button>
+        <button class="key-btn action-btn" onclick="deleteInput()" aria-label="Delete">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
+                <line x1="18" y1="9" x2="12" y2="15"></line>
+                <line x1="12" y1="9" x2="18" y2="15"></line>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Footer Security Shield Badge -->
+    <div class="text-[10px] text-white/30 tracking-wider uppercase font-semibold text-center mt-1 flex items-center justify-center gap-1">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Protected by Playcentrix Passkey
+    </div>
+
+</div>
+
+<script>
+    /* Strict Mobile Lock Settings (Prevent zoom & scrolling) */
+    let lastTouchEnd = 0;
+    
+    // Prevent double-tap zooming on iOS Safari
+    document.addEventListener('touchend', function (e) {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 280) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
+
+    // Prevent pinch zoom gestures
+    document.addEventListener('gesturestart', function (e) {
+        e.preventDefault();
+    });
+
+    // Prevent touch dragging / screen bouncy scrolling
+    document.addEventListener('touchmove', function (e) {
+        e.preventDefault();
+    }, { passive: false });
+
+    /* Application State Variables */
+    let mathAnswerTarget = "";
+    let userEnteredInput = "";
+    let targetLength = 2;
+    let isVerifying = false;
+
+    /* Web Audio Synthesizer Engine */
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    function playSound(type) {
+        try {
+            initAudio();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'tap') {
+                // Tactile iOS Key Press Click Tone
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1100, now);
+                osc.frequency.exponentialRampToValueAtTime(320, now + 0.025);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+
+                osc.start(now);
+                osc.stop(now + 0.025);
+            } else if (type === 'success') {
+                // Harmonized iOS Passkey Chime
+                const createNote = (freq, startTime, duration) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, startTime);
+
+                    gain.gain.setValueAtTime(0.2, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                };
+
+                createNote(523.25, now, 0.22);       // C5
+                createNote(659.25, now + 0.07, 0.28); // E5
+                createNote(783.99, now + 0.14, 0.35); // G5
+            } else if (type === 'error') {
+                // Gentle Error Sound
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(55, now + 0.22);
+
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+                osc.start(now);
+                osc.stop(now + 0.22);
+            }
+        } catch (e) {
+            // Audio fallback
+        }
+    }
+
+    /* High-contrast Anti-OCR Scribbled Canvas Captcha */
+    function renderScribbledCaptcha() {
+        const canvas = document.getElementById('captchaCanvas');
+        if (!canvas) return;
+
+        // Support High DPI Retina Displays
+        const dpr = window.devicePixelRatio || 1;
+        const width = canvas.parentElement.clientWidth - 28; // pad offset
+        const height = Math.max(54, Math.min(66, window.innerHeight * 0.08));
+
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        // 1. Generate clean addition/subtraction math problem
+        const isAddition = Math.random() > 0.3;
+        let num1, num2, answer;
+
+        if (isAddition) {
+            num1 = Math.floor(Math.random() * 40) + 12;
+            num2 = Math.floor(Math.random() * 45) + 6;
+            answer = num1 + num2;
+        } else {
+            num1 = Math.floor(Math.random() * 50) + 30;
+            num2 = Math.floor(Math.random() * 25) + 5;
+            answer = num1 - num2;
+        }
+
+        mathAnswerTarget = answer.toString();
+        targetLength = mathAnswerTarget.length;
+
+        setupPinDots(targetLength);
+
+        // 2. Deep dark gradient background
+        const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+        bgGrad.addColorStop(0, '#0a0f1d');
+        bgGrad.addColorStop(1, '#050811');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // 3. Subtle background grid & noise dots
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < width; x += 14) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        for (let i = 0; i < 35; i++) {
+            ctx.beginPath();
+            ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 1.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 4. Background Bézier curves / scratches (Anti-OCR layer 1)
+        const strokeColors = ['rgba(10, 132, 255, 0.35)', 'rgba(147, 51, 234, 0.3)', 'rgba(52, 199, 89, 0.25)'];
+        for (let i = 0; i < 4; i++) {
+            ctx.strokeStyle = strokeColors[i % strokeColors.length];
+            ctx.lineWidth = 1.2 + Math.random();
+            ctx.beginPath();
+            ctx.moveTo(Math.random() * width, Math.random() * height);
+            ctx.bezierCurveTo(
+                Math.random() * width, Math.random() * height,
+                Math.random() * width, Math.random() * height,
+                Math.random() * width, Math.random() * height
+            );
+            ctx.stroke();
+        }
+
+        // 5. Draw clear, ultra-readable math equation with slight organic tilt
+        const equationStr = `${num1} ${isAddition ? '+' : '-'} ${num2} = ?`;
+        const fontSize = Math.floor(Math.min(height * 0.52, 28));
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // High contrast text shadow & glow
+        ctx.shadowColor = 'rgba(10, 132, 255, 0.85)';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#FFFFFF';
+
+        // Slight character tilt for anti-OCR without harming human readability
+        ctx.save();
+        ctx.translate(width / 2, height / 2);
+        const rot = (Math.random() - 0.5) * 0.04;
+        ctx.rotate(rot);
+        ctx.fillText(equationStr, 0, 0);
+        ctx.restore();
+
+        // 6. Subtle foreground anti-OCR scribbles across text
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(width * 0.1, height * (0.3 + Math.random() * 0.4));
+        ctx.lineTo(width * 0.9, height * (0.3 + Math.random() * 0.4));
+        ctx.stroke();
+    }
+
+    /* Glowing Biometric Header Ring Canvas */
+    const bioCanvas = document.getElementById('biometricCanvas');
+    let bioCtx = null;
+    let ringAngle = 0;
+
+    function initBiometricRing() {
+        if (!bioCanvas) return;
+        const dpr = window.devicePixelRatio || 1;
+        const rect = bioCanvas.parentElement.getBoundingClientRect();
+        
+        bioCanvas.width = rect.width * dpr;
+        bioCanvas.height = rect.height * dpr;
+        bioCtx = bioCanvas.getContext('2d');
+        bioCtx.scale(dpr, dpr);
+    }
+
+    function renderBiometricRing() {
+        if (!bioCtx) return;
+        const width = bioCanvas.width / (window.devicePixelRatio || 1);
+        const height = bioCanvas.height / (window.devicePixelRatio || 1);
+        
+        bioCtx.clearRect(0, 0, width, height);
+        const cx = width / 2;
+        const cy = height / 2;
+        const radius = Math.min(cx, cy) - 6;
+
+        // Rotating dashed ring
+        bioCtx.save();
+        bioCtx.translate(cx, cy);
+        bioCtx.rotate(ringAngle);
+
+        bioCtx.beginPath();
+        bioCtx.arc(0, 0, radius, 0, Math.PI * 2);
+        bioCtx.strokeStyle = 'rgba(10, 132, 255, 0.45)';
+        bioCtx.lineWidth = 2.2;
+        bioCtx.setLineDash([8, 7]);
+        bioCtx.stroke();
+        bioCtx.restore();
+
+        // Inner glowing ring
+        bioCtx.beginPath();
+        bioCtx.arc(cx, cy, radius - 8, 0, Math.PI * 2);
+        bioCtx.strokeStyle = isVerifying ? 'rgba(48, 209, 88, 0.75)' : 'rgba(10, 132, 255, 0.2)';
+        bioCtx.lineWidth = 1.5;
+        bioCtx.setLineDash([]);
+        bioCtx.stroke();
+
+        ringAngle += isVerifying ? 0.05 : 0.012;
+        requestAnimationFrame(renderBiometricRing);
+    }
+
+    /* Dynamic Dot Input Logic */
+    function setupPinDots(count) {
+        const dotsContainer = document.getElementById('pinDots');
+        dotsContainer.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'pin-dot';
+            dotsContainer.appendChild(dot);
+        }
+    }
+
+    function refreshCaptcha() {
+        playSound('tap');
+        const svg = document.getElementById('refreshSvg');
+        if (svg) {
+            svg.classList.add('spin-once');
+            setTimeout(() => svg.classList.remove('spin-once'), 500);
+        }
+        clearInput();
+        renderScribbledCaptcha();
+        updateStatus('New challenge loaded', 'text-white/60');
+    }
+
+    function handleNumpadInput(digit) {
+        if (isVerifying) return;
+        playSound('tap');
+
+        if (userEnteredInput.length < targetLength) {
+            userEnteredInput += digit;
+            updatePinDots();
+        }
+
+        // Automatic evaluation when input length reaches target
+        if (userEnteredInput.length === targetLength) {
+            triggerAutoVerification();
+        }
+    }
+
+    function deleteInput() {
+        if (isVerifying) return;
+        playSound('tap');
+        if (userEnteredInput.length > 0) {
+            userEnteredInput = userEnteredInput.slice(0, -1);
+            updatePinDots();
+        }
+    }
+
+    function clearInput() {
+        if (isVerifying) return;
+        playSound('tap');
+        userEnteredInput = "";
+        updatePinDots();
+    }
+
+    function updatePinDots() {
+        const dots = document.querySelectorAll('.pin-dot');
+        dots.forEach((dot, index) => {
+            dot.className = 'pin-dot';
+            if (index < userEnteredInput.length) {
+                dot.classList.add('filled');
+            }
+        });
+    }
+
+    function updateStatus(text, colorClass) {
+        const statusEl = document.getElementById('statusMessage');
+        statusEl.innerHTML = `<span>${text}</span>`;
+        statusEl.className = `text-xs font-medium transition-all duration-200 text-center flex items-center gap-1.5 ${colorClass}`;
+    }
+
+    /* Auto Verification Logic */
+    function triggerAutoVerification() {
+        if (isVerifying) return;
+
+        isVerifying = true;
+        const spinner = document.getElementById('verifyingSpinner');
+        const cardContainer = document.getElementById('cardContainer');
+        const shieldBadge = document.getElementById('shieldBadge');
+        const shieldIcon = document.getElementById('shieldIcon');
+        const dots = document.querySelectorAll('.pin-dot');
+
+        spinner.classList.remove('hidden');
+        updateStatus('Verifying answer...', 'text-blue-400 font-medium');
+
+        setTimeout(() => {
+            spinner.classList.add('hidden');
+
+            if (userEnteredInput === mathAnswerTarget) {
+                // Success Path
+                playSound('success');
+                if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+
+                updateStatus('Verification Successful', 'text-emerald-400 font-semibold');
+                dots.forEach(d => d.className = 'pin-dot success');
+
+                shieldBadge.style.borderColor = 'rgba(48, 209, 88, 0.6)';
+                shieldBadge.style.boxShadow = '0 0 25px rgba(48, 209, 88, 0.5)';
+                shieldIcon.setAttribute('stroke', '#30D158');
+                shieldIcon.innerHTML = `<polyline points="20 6 9 17 4 12"></polyline>`;
+
+                // Seamless automatic redirect to Cre.html
+                setTimeout(() => {
+                    window.location.href = 'Cre.html';
+                }, 550);
+
+            } else {
+                // Error Path
+                playSound('error');
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+                isVerifying = false;
+                dots.forEach(d => d.className = 'pin-dot error');
+                cardContainer.classList.add('shake');
+
+                updateStatus('Incorrect code. Try again.', 'text-rose-400 font-semibold');
+
+                setTimeout(() => {
+                    cardContainer.classList.remove('shake');
+                    userEnteredInput = "";
+                    renderScribbledCaptcha();
+                }, 650);
+            }
+        }, 400);
+    }
+
+    /* Window Load & Resize Initializer */
+    window.addEventListener('load', () => {
+        initBiometricRing();
+        renderBiometricRing();
+        renderScribbledCaptcha();
+    });
+
+    window.addEventListener('resize', () => {
+        initBiometricRing();
+        renderScribbledCaptcha();
+    });
+</script>
+</body>
+</html>
