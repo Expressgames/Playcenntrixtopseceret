@@ -578,8 +578,9 @@ function initFaceMeshScan() {
                 localStorage.setItem('playcentrix_main_session', JSON.stringify(mainSession));
 
                 setTimeout(() => {
-                    window.location.href = 'main.html';
-                }, 800);
+    sessionStorage.setItem("PLAYCENTRIX_NEXT", "4");
+    window.location.href = 'main.html';
+}, 1500);
             }
         } else {
             // Face lost - reset timer
