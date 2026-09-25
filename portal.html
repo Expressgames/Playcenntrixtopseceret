@@ -1,1 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Referrer Test</title>
+</head>
+<body>
+    <h2>Browser Referrer Test</h2>
 
+    <p><b>document.referrer:</b></p>
+    <pre id="referrer"></pre>
+
+    <p><b>Current URL:</b></p>
+    <pre id="current"></pre>
+
+    <p><b>Origin:</b></p>
+    <pre id="origin"></pre>
+
+    <script>
+        document.getElementById("referrer").textContent =
+            document.referrer || "(EMPTY — browser sent no referrer)";
+
+        document.getElementById("current").textContent =
+            window.location.href;
+
+        document.getElementById("origin").textContent =
+            window.location.origin;
+    </script>
+</body>
+</html>
