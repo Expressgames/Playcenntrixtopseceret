@@ -1,7 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+
+    <script>
+    (function () {
+        const allowedSite = "https://expressgames.github.io/Playcenntrixtopseceretall/";
+        const referrer = document.referrer;
+
+        if (!referrer || !referrer.startsWith(allowedSite)) {
+            window.location.replace("index.html");
+        }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <!-- rest of your existing head -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Playcentrix | Signature Verification</title>
   <script src="https://cdn.tailwindcss.com"></script>
