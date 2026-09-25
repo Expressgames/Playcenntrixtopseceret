@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playcentrix Sandbox - Secure Cloud Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        google: {
+                            blue: '#1A73E8',
+                            blueHover: '#1557B0',
+                            blueLight: '#E8F0FE',
+                            grayText: '#5F6368',
+                            darkText: '#202124',
+                            border: '#DADCE0',
+                            bg: '#F8F9FA',
+                            green: '#137333',
+                            greenBg: '#E6F4EA',
+                            red: '#D93025',
+                            redBg: '#FCE8E6',
+                        }
+                    },
+                    boxShadow: {
+                        'material': '0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)',
+                        'material-hover': '0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)',
+                        'material-modal': '0 8px 24px 0 rgba(60,64,67,0.28)',
+                    },
+                    keyframes: {
+                        shake: {
+                            '0%, 100%': { transform: 'translateX(0)' },
+                            '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-5px)' },
+                            '20%, 40%, 60%, 80%': { transform: 'translateX(5px)' }
+                        }
+                    },
+                    animation: {
+                        shake: 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px; height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Syntax Highlighter Overlay Container */
+        .workspace-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        /* Backdrop (Colors) and Textarea (Input) must perfectly overlap */
+        .highlight-backdrop, .highlight-textarea {
+            width: 100%;
+            height: 100%;
+            padding: 1.5rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            line-height: 1.625;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border-radius: 1rem;
+        }
+        .highlight-backdrop {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            color: #202124;
+            pointer-events: none;
+            overflow: hidden; /* Scroll is controlled by textarea */
+            background-color: white;
+        }
+        .highlight-textarea {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 2;
+            color: transparent;
+            background-color: transparent;
+            caret-color: #1A73E8;
+            outline: none;
+            resize: none;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body class="h-full font-sans antialiased bg-google-bg text-google-darkText selection:bg-google-blueLight selection:text-google-blue">
+
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- VIEW 1: CAPTCHA VERIFICATION SCREEN -->
+    <div id="verification-screen" class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 transition-opacity duration-300">
+        <div id="captcha-card" class="w-full max-w-md bg-white rounded-2xl border border-google-border shadow-material p-8 flex flex-col items-center text-center">
+            
+            <div class="w-12 h-12 bg-google-blueLight rounded-xl flex items-center justify-center mb-5 text-google-blue">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+            </div>
+
+            <h1 class="text-2xl font-semibold text-google-darkText tracking-tight">Security Check</h1>
+            <p class="text-sm text-google-grayText mt-2 mb-8">Please solve the equation to verify your session.</p>
+
+            <form id="captcha-form" onsubmit="handleCaptchaSubmit(event)" class="w-full flex flex-col items-center">
+                <div class="bg-slate-50 border border-slate-200 rounded-xl py-4 px-8 mb-6 flex items-center justify-center shadow-inner w-full">
+                    <span id="captcha-equation" class="text-3xl font-mono font-semibold tracking-wider text-slate-700">5 + 4 = ?</span>
+                </div>
+                
+                <input 
+                    type="number" 
+                    id="captcha-input" 
+                    placeholder="Enter answer"
+                    required
+                    class="w-full max-w-[200px] text-center px-4 py-3 text-lg font-mono border-2 border-google-border rounded-xl focus:outline-none focus:border-google-blue focus:ring-2 focus:ring-google-blueLight transition-all"
+                >
+                
+                <button type="submit" class="mt-6 w-full max-w-[200px] px-6 py-3 bg-google-blue hover:bg-google-blueHover text-white font-medium rounded-full shadow-sm hover:shadow transition-all">
+                    Verify
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboard-screen" class="hidden min-h-screen flex flex-col">
+        <header class="bg-white border-b border-google-border px-4 sm:px-8 py-3.5 sticky top-0 z-20 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-google-blue rounded-lg flex items-center justify-center text-white shadow-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                </div>
+                <div>
+                    <h1 class="text-base font-semibold text-google-darkText tracking-tight leading-none">Playcentrix Sandbox</h1>
+                    <span class="text-[11px] text-google-grayText font-medium">Cloud Node Manager</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-google-greenBg text-google-green rounded-full text-xs font-medium">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Verified</span>
+                </div>
+                <div id="server-count-badge" class="px-3 py-1 bg-slate-100 text-google-darkText rounded-full text-xs font-semibold border border-slate-200">
+                    Servers (0/1)
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-8">
+            <div class="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-normal text-google-darkText">Server Environment</h2>
+                    <p class="text-sm text-google-grayText mt-1">Manage, activate, and store workstation notes inside your isolated server node.</p>
+                </div>
+            </div>
+
+            <div id="server-node-container" class="w-full">
+                <!-- Dynamic Content Injected Here -->
+            </div>
+        </main>
+    </div>
+
+    <div id="create-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl border border-google-border shadow-material-modal w-full max-w-md overflow-hidden">
+            <div class="p-6 border-b border-google-border flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-google-blueLight text-google-blue flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-google-darkText">Allocate New Node</h3>
+                </div>
+                <button onclick="closeCreateModal()" class="text-google-grayText hover:text-google-darkText p-1 rounded-full hover:bg-slate-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <form id="create-server-form" onsubmit="handleCreateServer(event)" class="p-6 space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Server Name</label>
+                    <input type="text" id="input-server-name" placeholder="e.g. Omega Node" required class="w-full px-3.5 py-2.5 border border-google-border rounded-lg text-sm focus:outline-none focus:border-google-blue focus:ring-1 focus:ring-google-blue">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Server Address</label>
+                    <input type="text" id="input-server-address" placeholder="name:server:000" required class="w-full px-3.5 py-2.5 border border-google-border rounded-lg text-sm font-mono focus:outline-none focus:border-google-blue focus:ring-1 focus:ring-google-blue">
+                    <p class="text-[11px] text-google-grayText mt-1.5">Format required: [name]:server:[3 digits]</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Target Server</label>
+                    <input type="text" id="input-target-address" placeholder="playcentrix:server:058" required class="w-full px-3.5 py-2.5 border border-google-border rounded-lg text-sm font-mono focus:outline-none focus:border-google-blue focus:ring-1 focus:ring-google-blue">
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-3">
+                    <button type="button" onclick="closeCreateModal()" class="px-4 py-2 text-sm font-medium text-google-grayText hover:bg-slate-100 rounded-full transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-google-blue hover:bg-google-blueHover text-white text-sm font-medium rounded-full shadow-sm hover:shadow transition-all">Create Server</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Activation PIN Modal -->
+    <div id="activate-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl border border-google-border shadow-material-modal w-full max-w-sm p-6 text-center">
+            <h3 class="text-lg font-medium text-google-darkText mb-1">Activate Server</h3>
+            <p class="text-xs text-google-grayText mb-5">Create a 3-digit PIN to secure this node forever.</p>
+            <form onsubmit="handleActivateSubmit(event)">
+                <input type="password" id="activate-pin-input" required maxlength="3" pattern="\d{3}" placeholder="•••" class="w-32 mx-auto text-center px-4 py-3 text-2xl tracking-[0.5em] font-mono border border-google-border rounded-xl focus:outline-none focus:border-google-blue focus:ring-2 focus:ring-google-blueLight transition-all">
+                <div class="mt-6 flex justify-center gap-3">
+                    <button type="button" onclick="closeActivateModal()" class="px-4 py-2 text-sm font-medium text-google-grayText hover:bg-slate-100 rounded-full transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-google-blue hover:bg-google-blueHover text-white text-sm font-medium rounded-full shadow-sm">Set PIN & Activate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete PIN Modal -->
+    <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+        <div id="delete-modal-card" class="bg-white rounded-2xl border border-google-border shadow-material-modal w-full max-w-sm p-6 text-center">
+            <h3 class="text-lg font-medium text-google-red mb-1">Delete Server Node</h3>
+            <p class="text-xs text-google-grayText mb-5">Enter your 3-digit PIN to confirm deletion.</p>
+            <form onsubmit="handleDeleteSubmit(event)">
+                <input type="password" id="delete-pin-input" required maxlength="3" pattern="\d{3}" placeholder="•••" class="w-32 mx-auto text-center px-4 py-3 text-2xl tracking-[0.5em] font-mono border border-google-red rounded-xl focus:outline-none focus:border-google-red focus:ring-2 focus:ring-google-redBg transition-all">
+                <div class="mt-6 flex justify-center gap-3">
+                    <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-google-grayText hover:bg-slate-100 rounded-full transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-google-red hover:bg-red-700 text-white text-sm font-medium rounded-full shadow-sm">Delete Forever</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="workspace-screen" class="hidden min-h-screen flex flex-col bg-google-bg">
+        <header class="bg-white border-b border-google-border px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+            <div class="flex items-center gap-3">
+                <button onclick="closeWorkspace()" class="p-2 text-google-grayText hover:text-google-darkText hover:bg-slate-100 rounded-full transition-colors flex items-center gap-1.5">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    <span class="text-sm font-medium hidden sm:inline">Back</span>
+                </button>
+                <div class="h-5 w-px bg-google-border"></div>
+                <span id="workspace-server-title" class="text-sm font-medium text-google-darkText"></span>
+            </div>
+            <button onclick="saveWorkspaceContent()" class="px-5 py-2 bg-google-blue hover:bg-google-blueHover text-white text-sm font-medium rounded-full shadow-sm transition-all flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                <span>Save</span>
+            </button>
+        </header>
+
+        <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col h-full">
+            <div class="workspace-container bg-white border border-google-border rounded-2xl shadow-material flex-1">
+                <div id="highlight-backdrop" class="highlight-backdrop" aria-hidden="true"></div>
+                <textarea 
+                    id="workspace-textarea"
+                    maxlength="15000"
+                    spellcheck="false"
+                    placeholder="Enter secure notes here. Highlights: server, gold, power (green) & x+number (red)."
+                    class="highlight-textarea"
+                ></textarea>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const STORAGE_SERVER = 'playcentrix_server_data';
+        const STORAGE_VERIFY = 'playcentrix_verify_timestamp';
+        let currentServer = null;
+        let captchaExpected = 0;
+        let taskNotificationFired = false;
+
+        // UI Helpers
+        function showToast(message, type = 'info', duration = 3500) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const isSuccess = type === 'success';
+            const isError = type === 'error';
+            const isAlert = type === 'alert';
+
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border shadow-material text-xs font-semibold transition-all duration-300 transform translate-y-2 opacity-0 ${
+                isSuccess ? 'bg-google-greenBg border-google-green text-google-green' :
+                isError ? 'bg-google-redBg border-google-red text-google-red' :
+                isAlert ? 'bg-amber-50 border-amber-500 text-amber-700' :
+                'bg-white border-google-border text-google-darkText'
+            }`;
+
+            const iconSvg = isSuccess ? `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>` :
+                            isError ? `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>` :
+                            isAlert ? `<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>` :
+                            `<svg class="w-4 h-4 shrink-0 text-google-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+
+            toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        // Init App
+        window.addEventListener('DOMContentLoaded', () => {
+            const lastVerify = localStorage.getItem(STORAGE_VERIFY);
+            const now = Date.now();
+            const validTime = 24 * 60 * 60 * 1000; // 24 hours
+
+            if (lastVerify && (now - parseInt(lastVerify) < validTime)) {
+                openDashboard();
+            } else {
+                initCaptcha();
+            }
+        });
+
+        // 1. CAPTCHA LOGIC
+        function initCaptcha() {
+            document.getElementById('verification-screen').classList.remove('hidden');
+            generateCaptcha();
+        }
+
+        function generateCaptcha() {
+            let a = Math.floor(Math.random() * 9) + 1;
+            let b = Math.floor(Math.random() * 9) + 1;
+            let isPlus = Math.random() > 0.5;
+            
+            // Ensure no negative answers for simpler UX
+            if (!isPlus && a < b) { let temp = a; a = b; b = temp; }
+            
+            captchaExpected = isPlus ? (a + b) : (a - b);
+            
+            document.getElementById('captcha-equation').textContent = `${a} ${isPlus ? '+' : '-'} ${b} = ?`;
+            document.getElementById('captcha-input').value = '';
+            document.getElementById('captcha-input').focus();
+        }
+
+        function handleCaptchaSubmit(e) {
+            e.preventDefault();
+            const inputVal = parseInt(document.getElementById('captcha-input').value, 10);
+            const card = document.getElementById('captcha-card');
+
+            if (inputVal === captchaExpected) {
+                localStorage.setItem(STORAGE_VERIFY, Date.now().toString());
+                showToast('Verification Successful', 'success');
+                document.getElementById('verification-screen').classList.add('hidden');
+                openDashboard();
+            } else {
+                card.classList.remove('animate-shake');
+                void card.offsetWidth; // trigger reflow
+                card.classList.add('animate-shake');
+                showToast('Incorrect answer. New captcha generated.', 'error');
+                generateCaptcha();
+            }
+        }
+
+        // 2. DASHBOARD LOGIC
+        function openDashboard() {
+            document.getElementById('dashboard-screen').classList.remove('hidden');
+            loadServer();
+            renderDashboard();
+
+            // Trigger notification task shortly after dashboard loads
+            if (!taskNotificationFired) {
+                setTimeout(() => {
+                    showToast('New task available!', 'alert', 3500);
+                    taskNotificationFired = true;
+                }, 3000);
+            }
+        }
+
+        function loadServer() {
+            const data = localStorage.getItem(STORAGE_SERVER);
+            currentServer = data ? JSON.parse(data) : null;
+        }
+
+        function renderDashboard() {
+            const container = document.getElementById('server-node-container');
+            const countBadge = document.getElementById('server-count-badge');
+
+            if (!currentServer) {
+                countBadge.textContent = 'Servers (0/1)';
+                container.innerHTML = `
+                    <div onclick="openCreateModal()" class="border-2 border-dashed border-google-border rounded-2xl p-10 flex flex-col items-center justify-center text-center cursor-pointer hover:border-google-blue hover:bg-google-blueLight/20 transition-all group min-h-[240px]">
+                        <div class="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center group-hover:bg-google-blueLight group-hover:text-google-blue transition-colors mb-4">
+                            <svg class="w-6 h-6 text-google-grayText group-hover:text-google-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        </div>
+                        <h3 class="text-base font-semibold text-google-darkText">Deploy New Server Node</h3>
+                        <p class="text-xs text-google-grayText mt-1">Slot available (0/1). Click to setup.</p>
+                    </div>
+                `;
+            } else {
+                countBadge.textContent = 'Servers (1/1)';
+                
+                let actionsHtml = '';
+                if (!currentServer.activated) {
+                    actionsHtml = `
+                        <button onclick="openActivateModal()" class="px-5 py-2 bg-google-blue hover:bg-google-blueHover text-white text-sm font-medium rounded-full shadow-sm transition-all">
+                            Activate Server
+                        </button>
+                    `;
+                } else {
+                    actionsHtml = `
+                        <div class="flex items-center gap-3">
+                            <button onclick="openWorkspace()" class="px-5 py-2 bg-white border border-google-border hover:bg-slate-50 text-google-darkText text-sm font-medium rounded-full transition-all shadow-sm">
+                                Open Workspace
+                            </button>
+                            <button onclick="openDeleteModal()" class="px-5 py-2 bg-google-redBg hover:bg-red-100 text-google-red text-sm font-medium rounded-full transition-all">
+                                Delete Server
+                            </button>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="bg-white border border-google-border rounded-2xl shadow-material overflow-hidden transition-all">
+                        <div class="p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-xl bg-google-blueLight text-google-blue flex items-center justify-center">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="text-lg font-semibold text-google-darkText">${escapeHtml(currentServer.name)}</h3>
+                                            ${currentServer.activated ? 
+                                                `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-google-greenBg text-google-green">Activated</span>` : 
+                                                `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">Standby</span>`
+                                            }
+                                        </div>
+                                        <div class="text-xs text-google-grayText mt-1 font-mono">
+                                            Address: <span class="text-slate-700 font-medium">${escapeHtml(currentServer.address)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-6 py-4 bg-slate-50 border-t border-google-border flex items-center justify-between">
+                            <div class="text-xs text-google-grayText font-mono">
+                                Target: <span class="text-google-blue font-medium">${escapeHtml(currentServer.target)}</span>
+                            </div>
+                            ${actionsHtml}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 3. CREATE SERVER LOGIC
+        function openCreateModal() {
+            document.getElementById('create-modal').classList.remove('hidden');
+            document.getElementById('create-server-form').reset();
+        }
+        function closeCreateModal() {
+            document.getElementById('create-modal').classList.add('hidden');
+        }
+
+        function handleCreateServer(e) {
+            e.preventDefault();
+            const name = document.getElementById('input-server-name').value.trim();
+            const address = document.getElementById('input-server-address').value.trim();
+            const target = document.getElementById('input-target-address').value.trim();
+
+            const addressRegex = /^[a-zA-Z0-9]+:server:\d{3}$/;
+            if (!addressRegex.test(address)) {
+                showToast("Invalid Address format (Expected: name:server:000)", "error");
+                return;
+            }
+
+            if (target !== 'playcentrix:server:058') {
+                showToast("Server Not Found. Target mismatch.", "error");
+                return;
+            }
+
+            showToast("Target Server Connected", "success");
+
+            currentServer = {
+                name: name,
+                address: address,
+                target: target,
+                activated: false,
+                pin: null,
+                text: ''
+            };
+
+            localStorage.setItem(STORAGE_SERVER, JSON.stringify(currentServer));
+            closeCreateModal();
+            renderDashboard();
+        }
+
+        // 4. ACTIVATION LOGIC
+        function openActivateModal() {
+            document.getElementById('activate-modal').classList.remove('hidden');
+            document.getElementById('activate-pin-input').value = '';
+            setTimeout(() => document.getElementById('activate-pin-input').focus(), 100);
+        }
+        function closeActivateModal() {
+            document.getElementById('activate-modal').classList.add('hidden');
+        }
+
+        function handleActivateSubmit(e) {
+            e.preventDefault();
+            const pin = document.getElementById('activate-pin-input').value;
+            if (pin.length !== 3) return;
+
+            currentServer.activated = true;
+            currentServer.pin = pin;
+            localStorage.setItem(STORAGE_SERVER, JSON.stringify(currentServer));
+            
+            closeActivateModal();
+            showToast("Server Activated successfully", "success");
+            renderDashboard();
+        }
+
+        // 5. DELETION LOGIC
+        function openDeleteModal() {
+            document.getElementById('delete-modal').classList.remove('hidden');
+            document.getElementById('delete-pin-input').value = '';
+            setTimeout(() => document.getElementById('delete-pin-input').focus(), 100);
+        }
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.add('hidden');
+        }
+
+        function handleDeleteSubmit(e) {
+            e.preventDefault();
+            const pin = document.getElementById('delete-pin-input').value;
+            const modal = document.getElementById('delete-modal-card');
+
+            if (pin === currentServer.pin) {
+                currentServer = null;
+                localStorage.removeItem(STORAGE_SERVER);
+                closeDeleteModal();
+                showToast("Server deleted permanently", "success");
+                renderDashboard();
+            } else {
+                modal.classList.remove('animate-shake');
+                void modal.offsetWidth; // trigger reflow
+                modal.classList.add('animate-shake');
+                showToast("Incorrect PIN", "error");
+                document.getElementById('delete-pin-input').value = '';
+            }
+        }
+
+        // 6. WORKSPACE / NOTEPAD LOGIC
+        const textarea = document.getElementById('workspace-textarea');
+        const backdrop = document.getElementById('highlight-backdrop');
+
+        function openWorkspace() {
+            document.getElementById('dashboard-screen').classList.add('hidden');
+            document.getElementById('workspace-screen').classList.remove('hidden');
+            document.getElementById('workspace-server-title').textContent = currentServer.name;
+            
+            textarea.value = currentServer.text || '';
+            handleHighlight(); // Initial highlight parse
+        }
+
+        function closeWorkspace() {
+            saveWorkspaceContent(false);
+            document.getElementById('workspace-screen').classList.add('hidden');
+            document.getElementById('dashboard-screen').classList.remove('hidden');
+        }
+
+        function saveWorkspaceContent(showNotif = true) {
+            if (currentServer) {
+                currentServer.text = textarea.value;
+                localStorage.setItem(STORAGE_SERVER, JSON.stringify(currentServer));
+                if (showNotif) showToast("Workspace Saved", "success");
+            }
+        }
+
+        // Syntax Highlighter Processing
+        function handleHighlight() {
+            const text = textarea.value;
+            
+            // 1. Escape HTML
+            let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // 2. Highlighting Rules
+            // GREEN: server, gold, power (case insensitive, whole words)
+            html = html.replace(/\b(server|gold|power|playcentrix|epicstream|nuke|bomb|destroy|firewall|security|attack|code)\b/gi, '<span class="text-google-green font-semibold">$1</span>');
+            
+            // RED: x or x+ followed by numbers. Regex: \bx\+?\d+\b
+            html = html.replace(/\b(x\+?\d+)\b/gi, '<span class="text-google-red font-semibold">$1</span>');
+
+            // 3. Trailing space for correct newline scrolling behavior
+            if (html.endsWith('\n')) {
+                html += ' ';
+            }
+
+            backdrop.innerHTML = html;
+        }
+
+        // Sync scroll between transparent textarea and backdrop div
+        textarea.addEventListener('scroll', () => {
+            backdrop.scrollTop = textarea.scrollTop;
+            backdrop.scrollLeft = textarea.scrollLeft;
+        });
+
+        textarea.addEventListener('input', handleHighlight);
+
+        // Utility
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
