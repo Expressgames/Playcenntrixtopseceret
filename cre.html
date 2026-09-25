@@ -1,17 +1,18 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full select-none">
 <head>
-
     <script>
     (function () {
-        const allowedSite = "https://expressgames.github.io/Playcenntrixtopseceret/";
-        const referrer = document.referrer;
-
-        if (!referrer || !referrer.startsWith(allowedSite)) {
+        if (sessionStorage.getItem("PLAYCENTRIX_NEXT") !== "2") {
             window.location.replace("index.html");
+            return;
         }
+
+        sessionStorage.removeItem("PLAYCENTRIX_NEXT");
     })();
     </script>
+
+    <!-- your existing head code -->
 
     <meta charset="UTF-8">
     <!-- rest of your existing head -->
