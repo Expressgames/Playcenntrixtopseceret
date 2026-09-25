@@ -739,8 +739,9 @@
 
                 // Seamless automatic redirect to Cre.html
                 setTimeout(() => {
-                    window.location.href = 'cre.html';
-                }, 550);
+    sessionStorage.setItem("PLAYCENTRIX_NEXT", "2");
+    window.location.href = 'cre.html';
+}, 550);
 
             } else {
                 // Error Path
