@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
 
-    <script>
-    (function () {
-        const allowedSite = "https://expressgames.github.io/Playcenntrixtopseceretall/";
-        const referrer = document.referrer;
+   <script>
+(function () {
+    if (sessionStorage.getItem("PLAYCENTRIX_NEXT") !== "5") {
+        window.location.replace("index.html");
+        return;
+    }
 
-        if (!referrer || !referrer.startsWith(allowedSite)) {
-            window.location.replace("index.html");
-        }
-    })();
-    </script>
+    sessionStorage.removeItem("PLAYCENTRIX_NEXT");
+})();
+</script>
 
     <meta charset="UTF-8">
     <!-- rest of your existing head -->
