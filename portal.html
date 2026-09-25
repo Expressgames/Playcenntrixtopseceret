@@ -1,29 +1,632 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Referrer Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0,
+                   maximum-scale=1.0, user-scalable=no">
+
+    <title>Playcentrix Portal</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                         Roboto, Arial, sans-serif;
+            background: #f6f7f9;
+            color: #15171a;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 760px;
+            height: 100dvh;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER */
+
+        .header {
+            padding: 8px 2px 18px;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+
+        .brand-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #15171a;
+            color: white;
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .brand-title {
+            font-size: 19px;
+            font-weight: 750;
+            letter-spacing: -0.4px;
+        }
+
+        .brand-subtitle {
+            margin-top: 2px;
+            font-size: 12px;
+            color: #7b8088;
+        }
+
+        /* PAGE LIST */
+
+        .page-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding-bottom: 12px;
+            scrollbar-width: none;
+        }
+
+        .page-list::-webkit-scrollbar {
+            display: none;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #8a8f97;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin: 4px 3px 9px;
+        }
+
+        .page-card {
+            width: 100%;
+            border: 1px solid #e6e8eb;
+            background: white;
+            border-radius: 16px;
+            min-height: 66px;
+            margin-bottom: 9px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            text-align: left;
+            cursor: pointer;
+            transition: transform .12s ease, border-color .12s ease;
+        }
+
+        .page-card:active {
+            transform: scale(.985);
+        }
+
+        .page-icon {
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+            border-radius: 12px;
+            background: #f1f3f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .page-info {
+            flex: 1;
+            min-width: 0;
+            margin-left: 12px;
+        }
+
+        .page-name {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .page-file {
+            margin-top: 3px;
+            color: #8a8f97;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .arrow {
+            color: #a1a6ad;
+            font-size: 20px;
+            padding-left: 8px;
+        }
+
+        /* FOOTER */
+
+        .footer {
+            flex-shrink: 0;
+            text-align: center;
+            padding: 10px 0 2px;
+            font-size: 10px;
+            color: #a0a4aa;
+            letter-spacing: .5px;
+        }
+
+        /* PASSCODE OVERLAY */
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(246,247,249,.96);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 100;
+        }
+
+        .overlay.show {
+            display: flex;
+        }
+
+        .pass-card {
+            width: 100%;
+            max-width: 390px;
+            background: white;
+            border: 1px solid #e4e6e9;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 18px 60px rgba(0,0,0,.09);
+        }
+
+        .pass-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pass-title {
+            font-size: 20px;
+            font-weight: 750;
+            letter-spacing: -.4px;
+        }
+
+        .close {
+            width: 34px;
+            height: 34px;
+            border: 0;
+            border-radius: 10px;
+            background: #f1f2f4;
+            color: #555b63;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .selected-page {
+            margin-top: 6px;
+            color: #8a8f97;
+            font-size: 12px;
+        }
+
+        .dots {
+            display: flex;
+            justify-content: center;
+            gap: 9px;
+            margin: 25px 0 21px;
+        }
+
+        .dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: #dfe2e6;
+            transition: .12s;
+        }
+
+        .dot.filled {
+            background: #15171a;
+        }
+
+        .error {
+            height: 18px;
+            text-align: center;
+            color: #d93025;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        /* KEYPAD */
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 9px;
+        }
+
+        .key {
+            height: 53px;
+            border: 1px solid #e5e7ea;
+            border-radius: 14px;
+            background: #f7f8f9;
+            font-size: 19px;
+            font-weight: 650;
+            cursor: pointer;
+            color: #17191c;
+        }
+
+        .key:active {
+            background: #e9ebee;
+            transform: scale(.97);
+        }
+
+        .key.backspace {
+            font-size: 17px;
+        }
+
+        .key.empty {
+            visibility: hidden;
+        }
+
+        /* PC INPUT */
+
+        .desktop-input {
+            display: none;
+            width: 100%;
+            height: 52px;
+            border: 1px solid #dedfe2;
+            border-radius: 14px;
+            padding: 0 15px;
+            outline: none;
+            font-size: 18px;
+            letter-spacing: 5px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .desktop-input:focus {
+            border-color: #15171a;
+        }
+
+        @media (min-width: 700px) {
+            .app {
+                padding: 28px;
+            }
+
+            .page-list {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                align-content: start;
+            }
+
+            .page-card {
+                margin-bottom: 0;
+            }
+
+            .mobile-keypad {
+                display: none;
+            }
+
+            .desktop-input {
+                display: block;
+            }
+
+            .pass-card {
+                padding: 28px;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <h2>Browser Referrer Test</h2>
 
-    <p><b>document.referrer:</b></p>
-    <pre id="referrer"></pre>
+<div class="app">
 
-    <p><b>Current URL:</b></p>
-    <pre id="current"></pre>
+    <header class="header">
+        <div class="brand">
+            <div class="brand-icon">P</div>
 
-    <p><b>Origin:</b></p>
-    <pre id="origin"></pre>
+            <div>
+                <div class="brand-title">Playcentrix Portal</div>
+                <div class="brand-subtitle">
+                    Private page access
+                </div>
+            </div>
+        </div>
+    </header>
 
-    <script>
-        document.getElementById("referrer").textContent =
-            document.referrer || "(EMPTY — browser sent no referrer)";
+    <main class="page-list">
 
-        document.getElementById("current").textContent =
-            window.location.href;
+        <div class="section-title">
+            Available Pages
+        </div>
 
-        document.getElementById("origin").textContent =
-            window.location.origin;
-    </script>
+        <button class="page-card"
+                onclick="openPasscode('cre.html', 'CRE', '2')">
+            <div class="page-icon">C</div>
+            <div class="page-info">
+                <div class="page-name">CRE</div>
+                <div class="page-file">cre.html</div>
+            </div>
+            <div class="arrow">›</div>
+        </button>
+
+        <button class="page-card"
+                onclick="openPasscode('step.html', 'Step', '3')">
+            <div class="page-icon">S</div>
+            <div class="page-info">
+                <div class="page-name">Step</div>
+                <div class="page-file">step.html</div>
+            </div>
+            <div class="arrow">›</div>
+        </button>
+
+        <button class="page-card"
+                onclick="openPasscode('main.html', 'Main', '4')">
+            <div class="page-icon">M</div>
+            <div class="page-info">
+                <div class="page-name">Main</div>
+                <div class="page-file">main.html</div>
+            </div>
+            <div class="arrow">›</div>
+        </button>
+
+        <button class="page-card"
+                onclick="openPasscode('admin.html', 'Admin', '5')">
+            <div class="page-icon">A</div>
+            <div class="page-info">
+                <div class="page-name">Admin</div>
+                <div class="page-file">admin.html</div>
+            </div>
+            <div class="arrow">›</div>
+        </button>
+
+    </main>
+
+    <footer class="footer">
+        PLAYCENTRIX PRIVATE PORTAL
+    </footer>
+
+</div>
+
+
+<!-- PASSCODE -->
+
+<div class="overlay" id="overlay">
+
+    <div class="pass-card">
+
+        <div class="pass-top">
+            <div>
+                <div class="pass-title">Enter Passcode</div>
+                <div class="selected-page" id="selectedPage">
+                    Accessing page
+                </div>
+            </div>
+
+            <button class="close" onclick="closePasscode()">×</button>
+        </div>
+
+        <input
+            id="desktopInput"
+            class="desktop-input"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="6"
+            autocomplete="off"
+            oninput="desktopInputChanged()"
+        >
+
+        <div class="dots" id="dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="keypad mobile-keypad">
+
+            <button class="key" onclick="pressKey('1')">1</button>
+            <button class="key" onclick="pressKey('2')">2</button>
+            <button class="key" onclick="pressKey('3')">3</button>
+
+            <button class="key" onclick="pressKey('4')">4</button>
+            <button class="key" onclick="pressKey('5')">5</button>
+            <button class="key" onclick="pressKey('6')">6</button>
+
+            <button class="key" onclick="pressKey('7')">7</button>
+            <button class="key" onclick="pressKey('8')">8</button>
+            <button class="key" onclick="pressKey('9')">9</button>
+
+            <button class="key empty"></button>
+            <button class="key" onclick="pressKey('0')">0</button>
+            <button class="key backspace" onclick="backspace()">⌫</button>
+
+        </div>
+
+    </div>
+</div>
+
+
+<script>
+
+    const PASSCODE = "786321";
+
+    let selectedFile = "";
+    let selectedName = "";
+    let selectedCode = "";
+
+    let enteredCode = "";
+
+    function openPasscode(file, name, code) {
+
+        selectedFile = file;
+        selectedName = name;
+        selectedCode = code;
+
+        enteredCode = "";
+
+        document.getElementById("selectedPage").textContent =
+            "Accessing " + name;
+
+        document.getElementById("error").textContent = "";
+
+        document.getElementById("overlay").classList.add("show");
+
+        updateDots();
+
+        const input = document.getElementById("desktopInput");
+
+        if (window.innerWidth >= 700) {
+            setTimeout(() => input.focus(), 80);
+        }
+    }
+
+    function closePasscode() {
+
+        document.getElementById("overlay").classList.remove("show");
+
+        enteredCode = "";
+
+        document.getElementById("desktopInput").value = "";
+
+        updateDots();
+    }
+
+    function pressKey(number) {
+
+        if (enteredCode.length >= 6) return;
+
+        enteredCode += number;
+
+        updateDots();
+
+        if (enteredCode.length === 6) {
+            checkCode();
+        }
+    }
+
+    function backspace() {
+
+        enteredCode = enteredCode.slice(0, -1);
+
+        updateDots();
+    }
+
+    function updateDots() {
+
+        const dots = document.querySelectorAll(".dot");
+
+        dots.forEach((dot, index) => {
+            dot.classList.toggle(
+                "filled",
+                index < enteredCode.length
+            );
+        });
+    }
+
+    function desktopInputChanged() {
+
+        const input = document.getElementById("desktopInput");
+
+        input.value = input.value
+            .replace(/\D/g, "")
+            .slice(0, 6);
+
+        enteredCode = input.value;
+
+        updateDots();
+
+        if (enteredCode.length === 6) {
+            checkCode();
+        }
+    }
+
+    function checkCode() {
+
+        if (enteredCode !== PASSCODE) {
+
+            document.getElementById("error").textContent =
+                "Incorrect passcode";
+
+            enteredCode = "";
+
+            document.getElementById("desktopInput").value = "";
+
+            updateDots();
+
+            return;
+        }
+
+        /*
+         * Correct passcode.
+         *
+         * Generate the authorization code required by
+         * the destination page BEFORE opening it.
+         */
+        sessionStorage.setItem(
+            "PLAYCENTRIX_NEXT",
+            selectedCode
+        );
+
+        window.location.href = selectedFile;
+    }
+
+    /* PC keyboard support */
+
+    document.addEventListener("keydown", function (event) {
+
+        if (!document.getElementById("overlay").classList.contains("show")) {
+            return;
+        }
+
+        if (event.key >= "0" && event.key <= "9") {
+
+            if (window.innerWidth < 700) {
+                pressKey(event.key);
+            }
+
+            return;
+        }
+
+        if (event.key === "Backspace") {
+
+            if (window.innerWidth < 700) {
+                backspace();
+            }
+
+            return;
+        }
+
+        if (event.key === "Escape") {
+            closePasscode();
+        }
+    });
+
+</script>
+
 </body>
 </html>
