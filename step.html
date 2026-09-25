@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    
+    <script>
+(function () {
+    if (sessionStorage.getItem("PLAYCENTRIX_NEXT") !== "3") {
+        window.location.replace("index.html");
+        return;
+    }
+
+    sessionStorage.removeItem("PLAYCENTRIX_NEXT");
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Playcentrix | Level 2 Security Protocol</title>
