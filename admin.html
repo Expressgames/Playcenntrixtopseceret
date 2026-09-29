@@ -805,9 +805,9 @@ function updatePasscodeDots() {
 }
 
 function verifyPasscode(actionTitle) {
-  if (inputPasscode === "4321") {
+  if (inputPasscode === "6126") {
     hapticFeedback([30, 50]);
-    sendTelegramNotice(`✅ Success: ${actionTitle} (Code: 4321)`);
+    sendTelegramNotice(`✅ Success: ${actionTitle} (Code: 6126)`);
 
     if (actionTitle === "Reveal Secrets") {
       modalTitle.textContent = "Classified Vault";
